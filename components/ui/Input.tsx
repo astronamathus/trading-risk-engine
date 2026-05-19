@@ -1,6 +1,3 @@
-// Reusable Input component
-// A simple, styled input field with label
-
 import React from 'react';
 
 interface InputProps {
@@ -25,10 +22,10 @@ export default function Input({
   step,
 }: InputProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={label} className="text-sm font-medium text-gray-700">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={label} className="text-sm font-medium text-slate-700">
         {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
+        {required && <span className="ml-1 text-rose-500">*</span>}
       </label>
       <input
         id={label}
@@ -37,11 +34,11 @@ export default function Input({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         step={step}
-        className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-          error ? 'border-red-500' : 'border-gray-300'
+        className={`rounded-xl border bg-white px-3 py-2.5 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-slate-300 ${
+          error ? 'border-rose-400' : 'border-slate-200'
         }`}
       />
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
   );
 }
