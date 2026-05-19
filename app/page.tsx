@@ -25,8 +25,17 @@ export default function Home() {
         throw new Error(stockData.error ?? 'Failed to fetch stock price');
       }
 
-      const output = calculatePositionSize(input, stockData.price);
-      setResult({ input, stockPrice: stockData.price, output });
+      const safeStopLoss = input.stopLoss >= stockData.price
+        ? Number((stockData.price * 0.98).toFixed(2))
+        : input.stopLoss;
+
+      const normalizedInput = {
+        ...input,
+        stopLoss: safeStopLoss,
+      };
+
+      const output = calculatePositionSize(normalizedInput, stockData.price);
+      setResult({ input: normalizedInput, stockPrice: stockData.price, output });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
