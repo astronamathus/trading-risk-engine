@@ -23,8 +23,8 @@ export default function Button({
     'inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50';
 
   const variantStyles = {
-    primary: 'bg-sky-500 text-slate-950 hover:bg-sky-400',
-    secondary: 'bg-slate-800 text-slate-100 hover:bg-slate-700',
+    primary: 'bg-slate-900 text-white hover:bg-slate-700',
+    secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200',
   };
 
   return (

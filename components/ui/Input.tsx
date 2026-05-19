@@ -23,9 +23,9 @@ export default function Input({
 }: InputProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={label} className="text-sm font-medium text-slate-200">
+      <label htmlFor={label} className="text-sm font-medium text-slate-700">
         {label}
-        {required && <span className="ml-1 text-rose-400">*</span>}
+        {required && <span className="ml-1 text-rose-500">*</span>}
       </label>
       <input
         id={label}
@@ -34,11 +34,11 @@ export default function Input({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         step={step}
-        className={`rounded-xl border bg-slate-900 px-3 py-2.5 text-slate-50 shadow-sm outline-none transition placeholder:text-slate-500 focus:ring-2 focus:ring-slate-500 ${
-          error ? 'border-rose-400' : 'border-slate-700'
+        className={`rounded-xl border bg-white px-3 py-2.5 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-slate-300 ${
+          error ? 'border-rose-400' : 'border-slate-200'
         }`}
       />
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
   );
 }

@@ -20,13 +20,13 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{result.input.ticker}</p>
-        <p className="mt-1 text-2xl font-semibold text-slate-100">{formatCurrency(result.stockPrice)}</p>
-        <p className="mt-1 text-xs text-slate-400">Current market price</p>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{result.input.ticker}</p>
+        <p className="mt-1 text-2xl font-semibold text-slate-900">{formatCurrency(result.stockPrice)}</p>
+        <p className="mt-1 text-xs text-slate-500">Current market price</p>
       </div>
 
-      <div className="space-y-2 rounded-xl border border-slate-700 p-4">
+      <div className="space-y-2 rounded-xl border border-slate-200 p-4">
         <Metric label="Risk per Share" value={formatCurrency(result.output.riskPerShare)} />
         <Metric label="Max Risk Amount" value={formatCurrency(result.output.maxRiskAmount)} />
         <Metric label="Position Size" value={`${formatNumber(result.output.positionSize)} shares`} emphasize />
@@ -46,9 +46,9 @@ function Metric({
   emphasize?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-800 py-2 last:border-b-0">
-      <span className="text-sm text-slate-300">{label}</span>
-      <span className={emphasize ? 'text-lg font-semibold text-slate-100' : 'text-sm font-medium text-slate-200'}>{value}</span>
+    <div className="flex items-center justify-between border-b border-slate-100 py-2 last:border-b-0">
+      <span className="text-sm text-slate-600">{label}</span>
+      <span className={emphasize ? 'text-lg font-semibold text-slate-900' : 'text-sm font-medium text-slate-800'}>{value}</span>
     </div>
   );
 }
