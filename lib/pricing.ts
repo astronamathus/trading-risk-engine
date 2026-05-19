@@ -1,16 +1,16 @@
+// Stock price fetching logic
+// Handles external API calls to get current stock prices
+
 import { StockPriceResponse } from './types';
 
-const DEFAULT_ALPHA_VANTAGE_API_KEY = 'TCRAMYPC2KKVEJEQ';
-
-interface AlphaVantageQuoteResponse {
-  'Global Quote'?: {
-    '05. price'?: string;
-  };
-  Note?: string;
-  Information?: string;
-  ErrorMessage?: string;
-}
-
+/**
+ * Fetch stock price from a free API
+ * For Indian stocks, we'll use a mock implementation initially
+ * In production, you would integrate with a real API like:
+ * - Yahoo Finance (unofficial)
+ * - Alpha Vantage (free tier)
+ * - NSE/BSE official APIs
+ */
 export async function fetchStockPrice(ticker: string): Promise<StockPriceResponse> {
   const normalizedTicker = ticker.toUpperCase().trim();
 
