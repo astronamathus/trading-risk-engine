@@ -18,24 +18,15 @@ export default function Home() {
     setResult(null);
 
     try {
-      // Fetch stock price from our API
       const response = await fetch(`/api/stock-price?ticker=${input.ticker}`);
-      
+      const stockData = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to fetch stock price');
+        throw new Error(stockData.error ?? 'Failed to fetch stock price');
       }
 
-      const stockData = await response.json();
-      const stockPrice = stockData.price;
-
-      // Calculate position size
-      const output = calculatePositionSize(input, stockPrice);
-
-      setResult({
-        input,
-        stockPrice,
-        output,
-      });
+      const output = calculatePositionSize(input, stockData.price);
+      setResult({ input, stockPrice: stockData.price, output });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -44,50 +35,48 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+    <main className="min-h-screen px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl">
+        <section className="mb-10 text-center">
+          <p className="mb-3 inline-flex rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs font-semibold tracking-wide text-sky-300">
+            Risk-first position sizing
+          </p>
+          <h1 className="mb-3 text-4xl font-semibold tracking-tight text-slate-100 sm:text-5xl" style={{ fontFamily: "var(--font-header)" }}>
             Trading Risk Calculator
           </h1>
-          <p className="text-lg text-gray-600">
-            Calculate optimal position sizes for Indian stocks based on your risk tolerance
+          <p className="mx-auto max-w-2xl text-base text-slate-300 sm:text-lg">
+            Beautifully simple workflow for position sizing. Enter your setup, fetch live-like pricing, and get clean risk metrics instantly.
           </p>
-        </div>
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card title="Enter Position Details">
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card title="Position Inputs">
             <PositionForm onSubmit={handleCalculate} loading={loading} />
           </Card>
 
           <div>
             {error && (
-              <Card className="mb-4 border-red-200 bg-red-50">
-                <p className="text-red-700">{error}</p>
+              <Card className="mb-4 border border-rose-500/40 bg-rose-950/60">
+                <p className="text-sm font-medium text-rose-300">{error}</p>
               </Card>
             )}
 
-            {result && (
-              <Card title="Calculation Results">
+            {result ? (
+              <Card title="Results">
                 <ResultsDisplay result={result} />
               </Card>
-            )}
-
-            {!result && !error && (
-              <Card className="flex items-center justify-center h-64">
-                <p className="text-gray-500 text-center">
-                  Enter your position details and click calculate to see results
-                </p>
-              </Card>
+            ) : (
+              !error && (
+                <Card className="flex h-full min-h-72 items-center justify-center text-center">
+                  <p className="max-w-sm text-sm text-slate-400">
+                    Your outputs will appear here after calculation, including risk per share, max drawdown risk, and capital required.
+                  </p>
+                </Card>
+              )
             )}
           </div>
-        </div>
-
-        <div className="mt-12 text-center text-sm text-gray-500">
-          <p>Built with Next.js, TypeScript, and Tailwind CSS</p>
-          <p className="mt-2">For educational purposes only. Not financial advice.</p>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
