@@ -1,6 +1,3 @@
-// Reusable Button component
-// A simple, styled button with loading state support
-
 import React from 'react';
 
 interface ButtonProps {
@@ -22,11 +19,12 @@ export default function Button({
   variant = 'primary',
   className = '',
 }: ButtonProps) {
-  const baseStyles = 'px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-  
+  const baseStyles =
+    'inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50';
+
   const variantStyles = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300',
+    primary: 'bg-slate-900 text-white hover:bg-slate-700',
+    secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200',
   };
 
   return (
@@ -36,7 +34,7 @@ export default function Button({
       disabled={disabled || loading}
       className={`${baseStyles} ${variantStyles[variant]} ${className}`}
     >
-      {loading ? 'Loading...' : children}
+      {loading ? 'Calculating…' : children}
     </button>
   );
 }

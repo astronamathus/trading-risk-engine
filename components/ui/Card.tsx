@@ -1,6 +1,3 @@
-// Reusable Card component
-// A container with consistent styling for content sections
-
 import React from 'react';
 
 interface CardProps {
@@ -11,8 +8,8 @@ interface CardProps {
 
 export default function Card({ children, title, className = '' }: CardProps) {
   return (
-    <div className={`bg-white rounded-lg shadow-md p-6 ${className}`}>
-      {title && <h2 className="text-xl font-semibold mb-4">{title}</h2>}
+    <div className={`rounded-2xl border border-slate-200/80 bg-white/90 p-6 shadow-sm backdrop-blur ${className}`}>
+      {title && <h2 className="mb-5 text-lg font-semibold tracking-tight text-slate-900">{title}</h2>}
       {children}
     </div>
   );

@@ -1,7 +1,7 @@
 // Stock price fetching logic
 // Handles external API calls to get current stock prices
 
-import { StockPriceResponse, ApiError } from './types';
+import { StockPriceResponse } from './types';
 
 /**
  * Fetch stock price from a free API
