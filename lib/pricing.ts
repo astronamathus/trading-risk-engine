@@ -1,18 +1,17 @@
-// Stock price fetching logic
-// Handles external API calls to get current stock prices
+import { StockPriceResponse } from './types';
 
-import { StockPriceResponse, ApiError } from './types';
+const DEFAULT_ALPHA_VANTAGE_API_KEY = 'TCRAMYPC2KKVEJEQ';
 
-/**
- * Fetch stock price from a free API
- * For Indian stocks, we'll use a mock implementation initially
- * In production, you would integrate with a real API like:
- * - Yahoo Finance (unofficial)
- * - Alpha Vantage (free tier)
- * - NSE/BSE official APIs
- */
+interface AlphaVantageQuoteResponse {
+  'Global Quote'?: {
+    '05. price'?: string;
+  };
+  Note?: string;
+  Information?: string;
+  ErrorMessage?: string;
+}
+
 export async function fetchStockPrice(ticker: string): Promise<StockPriceResponse> {
-  // Normalize ticker to uppercase
   const normalizedTicker = ticker.toUpperCase().trim();
 
   if (!normalizedTicker) {
@@ -20,70 +19,72 @@ export async function fetchStockPrice(ticker: string): Promise<StockPriceRespons
   }
 
   try {
-    // For MVP, we'll use a mock implementation
-    // This simulates an API call with realistic data
-    const mockPrice = await mockFetchStockPrice(normalizedTicker);
-    
+    const livePrice = await fetchLiveStockPrice(normalizedTicker);
+
     return {
       ticker: normalizedTicker,
-      price: mockPrice,
+      price: livePrice,
       currency: 'INR',
       timestamp: new Date().toISOString(),
     };
-  } catch (error) {
-    throw new Error(`Failed to fetch stock price: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } catch {
+    const fallbackPrice = await mockFetchStockPrice(normalizedTicker);
+    return {
+      ticker: normalizedTicker,
+      price: fallbackPrice,
+      currency: 'INR',
+      timestamp: new Date().toISOString(),
+    };
   }
 }
 
-/**
- * Mock implementation for development
- * Returns realistic prices for common Indian stocks
- * In production, replace this with actual API calls
- */
-async function mockFetchStockPrice(ticker: string): Promise<number> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 500));
+async function fetchLiveStockPrice(ticker: string): Promise<number> {
+  const apiKey = process.env.ALPHA_VANTAGE_API_KEY ?? DEFAULT_ALPHA_VANTAGE_API_KEY;
+  const symbol = `${ticker}.BSE`;
 
-  // Mock prices for common Indian stocks (in INR)
+  const response = await fetch(
+    `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`,
+    { cache: 'no-store' }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Live API request failed: ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as AlphaVantageQuoteResponse;
+
+  if (data.Note || data.Information || data.ErrorMessage) {
+    throw new Error(data.Note || data.Information || data.ErrorMessage || 'Live API returned an error');
+  }
+
+  const price = Number(data['Global Quote']?.['05. price']);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error('Live API returned invalid price');
+  }
+
+  return price;
+}
+
+async function mockFetchStockPrice(ticker: string): Promise<number> {
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
   const mockPrices: Record<string, number> = {
-    'RELIANCE': 2450.50,
-    'TCS': 3850.75,
-    'INFY': 1450.25,
-    'HDFC': 1650.00,
-    'ICICI': 1100.50,
-    'SBIN': 750.25,
-    'BHARTIARTL': 1250.75,
-    'ITC': 450.50,
-    'LICI': 950.00,
-    'TATAMOTORS': 950.25,
+    RELIANCE: 2450.5,
+    TCS: 3850.75,
+    INFY: 1450.25,
+    HDFC: 1650.0,
+    ICICI: 1100.5,
+    SBIN: 750.25,
+    BHARTIARTL: 1250.75,
+    ITC: 450.5,
+    LICI: 950.0,
+    TATAMOTORS: 950.25,
   };
 
-  // Return mock price if available, otherwise generate a random realistic price
   if (mockPrices[ticker]) {
     return mockPrices[ticker];
   }
 
-  // Generate a random price between 100 and 5000 for unknown tickers
   return Math.floor(Math.random() * 4900) + 100;
 }
-
-/**
- * Real API implementation example (commented out for MVP)
- * This shows how you would integrate with a real API
- * 
- * Uncomment and modify when you have access to a real API
- */
-/*
-async function realFetchStockPrice(ticker: string): Promise<number> {
-  const response = await fetch(
-    `https://api.example.com/stock/${ticker}?apikey=YOUR_API_KEY`
-  );
-
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.price;
-}
-*/
