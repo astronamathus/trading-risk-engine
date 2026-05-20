@@ -46,10 +46,13 @@ const PRESETS = [
   { label: "100%", pct: 1.00 },
 ];
 
+type CapitalMode = "auto" | "limit";
+
 export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }: ResultsPanelProps) {
   const { entryPrice, riskPerShare, maxRiskAmount } = result;
 
   const defaultLimit = Math.round(totalCapital * 0.10);
+  const [mode, setMode]                 = useState<CapitalMode>("limit");
   const [limitValue, setLimitValue]     = useState(defaultLimit);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef                     = useRef<HTMLDivElement>(null);
