@@ -189,7 +189,28 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
                 bg-slate-900 shadow-2xl shadow-black/40 p-3 flex flex-col gap-3">
 
                 <div>
-                  <p className="text-xs text-slate-500 mb-2">Quick presets</p>
+                  <p className="text-xs text-slate-500 mb-2">Mode</p>
+                  <button
+                    onClick={() => { setMode("auto"); setDropdownOpen(false); }}
+                    className={`w-full rounded-lg py-1.5 px-3 text-xs font-medium text-left
+                      transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500
+                      flex items-center justify-between
+                      ${mode === "auto"
+                        ? "bg-blue-600 text-white border border-blue-500"
+                        : "border border-slate-600 text-slate-300 hover:bg-slate-700"
+                      }`}
+                  >
+                    <span>Auto</span>
+                    <span className={`text-xs ${mode === "auto" ? "text-blue-200" : "text-slate-500"}`}>
+                      sized by risk rule
+                    </span>
+                  </button>
+                </div>
+
+                <div className="border-t border-slate-700" />
+
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">Capital limit presets</p>
                   <div className="grid grid-cols-5 gap-1.5">
                     {PRESETS.map(p => {
                       const isActive = activePreset?.label === p.label;
