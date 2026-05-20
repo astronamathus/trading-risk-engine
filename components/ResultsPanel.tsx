@@ -83,17 +83,18 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
   const pctOfCapital = (limitValue / totalCapital) * 100;
 
-  // Active preset: whichever pct matches current limitValue
-  const activePreset = PRESETS.find(
-    p => Math.round(totalCapital * p.pct) === limitValue
-  ) ?? null;
+  const activePreset = mode === "auto"
+    ? null
+    : PRESETS.find(p => Math.round(totalCapital * p.pct) === limitValue) ?? null;
 
-  const triggerLabel = activePreset
-    ? activePreset.label
-    : `${pctOfCapital.toFixed(1)}%`;
+  const triggerLabel = mode === "auto"
+    ? "Auto"
+    : activePreset
+      ? activePreset.label
+      : `${pctOfCapital.toFixed(1)}%`;
 
   function applyPreset(pct: number) {
-    // For 100%, set exactly to totalCapital (avoids rounding stopping short)
+    setMode("limit");
     setLimitValue(pct === 1 ? totalCapital : Math.round(totalCapital * pct));
     setDropdownOpen(false);
   }
