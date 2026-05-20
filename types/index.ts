@@ -1,40 +1,62 @@
 // ============================================================
 // types/index.ts
-// Central home for all TypeScript interfaces.
-// Rule: if more than one file uses a type, it lives here.
+// Single source of truth for all TypeScript interfaces.
+// If more than one file uses a type, it lives here.
 // ============================================================
 
 /**
  * What the user types into the calculator form.
+ * Used by: CalculatorForm, CalculatorClient, calculations.ts
  */
 export interface CalculatorInputs {
-  ticker: string;        // e.g. "RELIANCE" or "TCS"
-  stopLoss: number;      // Price at which you'll exit if wrong
-  capital: number;       // Total capital available (₹)
-  riskPercent: number;   // How much % of capital you're willing to lose
+  ticker:      string;   // e.g. "RELIANCE.NS"
+  stopLoss:    number;   // price at which you exit if wrong
+  capital:     number;   // total trading capital (₹)
+  riskPercent: number;   // % of capital willing to lose per trade
 }
 
 /**
- * The calculated results shown to the user.
+ * The full result returned by calculatePosition().
+ * Used by: CalculatorClient, ResultsPanel, ResultCard
  */
 export interface CalculationResult {
-  entryPrice: number;       // Fetched live from API
-  riskPerShare: number;     // Entry - Stop Loss
-  maxRiskAmount: number;    // Capital × (Risk% / 100)
-  positionSize: number;     // Max Risk / Risk Per Share (number of shares)
-  capitalRequired: number;  // Position Size × Entry Price
+  entryPrice:      number;  // live price fetched from API
+  riskPerShare:    number;  // entryPrice − stopLoss
+  maxRiskAmount:   number;  // capital × (riskPercent / 100)
+  positionSize:    number;  // floor(maxRiskAmount / riskPerShare)
+  capitalRequired: number;  // positionSize × entryPrice
 }
 
 /**
- * Shape of the response from our internal API route.
- * Using a discriminated union: either success or error.
+ * Response shape from GET /api/stock-price.
+ * Discriminated union: either success with price, or failure with error.
+ * Used by: app/api/stock-price/route.ts, CalculatorClient
  */
 export type StockPriceResponse =
-  | { success: true; ticker: string; price: number }
+  | { success: true;  ticker: string; price: number }
   | { success: false; error: string };
 
 /**
- * UI state for the calculator page.
- * Tracks what the component is currently doing.
+ * UI state machine for the calculator page.
+ * Used by: CalculatorClient
  */
 export type AppStatus = "idle" | "loading" | "success" | "error";
+
+/**
+ * A single validation error with an optional field reference.
+ * Used by: calculations.ts (validateInputs), CalculatorForm
+ */
+export interface ValidationError {
+  message: string;
+  field?: keyof CalculatorInputs;  // which field caused the error
+}
+
+/**
+ * Shape of errors returned from API routes.
+ * Used by: all API routes, CalculatorClient fetch handler
+ */
+export interface ApiError {
+  success: false;
+  error:   string;
+  code?:   number;   // optional HTTP status code
+}
