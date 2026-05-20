@@ -283,9 +283,11 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
         </span>
 
         <span className="text-xs text-slate-500 italic">
-          {limitValue === totalCapital
-            ? "Using full capital for this position"
-            : `Capped at ${formatINR(limitValue)} (${pctOfCapital.toFixed(1)}% of capital)`}
+          {mode === "auto"
+            ? "Sized purely by your risk rule (capital × risk% ÷ risk per share)"
+            : limitValue === totalCapital
+              ? "Using full capital for this position"
+              : `Capped at ${formatINR(limitValue)} (${pctOfCapital.toFixed(1)}% of capital)`}
         </span>
       </div>
     </div>
