@@ -1,21 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { CalculatorInputs } from "@/types";
+import { searchStocks, StockEntry } from "@/lib/stockList";
 
 interface CalculatorFormProps {
-  onSubmit: (inputs: CalculatorInputs) => void;
+  onSubmit:  (inputs: CalculatorInputs) => void;
   isLoading: boolean;
 }
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: React.ReactNode;
-  children: React.ReactNode;
+function Field({ label, hint, children }: {
+  label: string; hint?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -32,37 +27,57 @@ const inputClass =
   "focus:border-transparent transition-all text-sm";
 
 export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormProps) {
-  const [ticker, setTicker]           = useState("");
-  const [stopLoss, setStopLoss]       = useState("");
-  const [capital, setCapital]         = useState("100000");
+  const [ticker,      setTicker]      = useState("");
+  const [stopLoss,    setStopLoss]    = useState("");
+  const [capital,     setCapital]     = useState("100000");
   const [riskPercent, setRiskPercent] = useState("1");
 
-  // LTP state — fetched when ticker loses focus
-  const [ltp, setLtp]               = useState<number | null>(null);
+  // LTP state
+  const [ltp,        setLtp]        = useState<number | null>(null);
   const [ltpLoading, setLtpLoading] = useState(false);
-  const [ltpError, setLtpError]     = useState<string | null>(null);
+  const [ltpError,   setLtpError]   = useState<string | null>(null);
 
-  // Fetch LTP and auto-populate stop loss when user leaves the ticker field
-  async function handleTickerBlur() {
-    const t = ticker.trim();
-    if (!t) return;
+  // Autocomplete state
+  const [suggestions,    setSuggestions]    = useState<StockEntry[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex,    setActiveIndex]    = useState(-1); // keyboard nav
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleTickerChange(val: string) {
+    const upper = val.toUpperCase();
+    setTicker(upper);
+    setLtp(null);
+    setLtpError(null);
+    setActiveIndex(-1);
+
+    const results = searchStocks(upper);
+    setSuggestions(results);
+    setShowSuggestions(results.length > 0);
+  }
+
+  async function fetchLtp(rawTicker: string) {
+    if (!rawTicker.trim()) return;
     setLtpLoading(true);
     setLtpError(null);
     setLtp(null);
-
     try {
-      const res  = await fetch(`/api/stock-price?ticker=${encodeURIComponent(t)}`);
+      const res  = await fetch(`/api/stock-price?ticker=${encodeURIComponent(rawTicker)}`);
       const data = await res.json();
-
       if (!data.success) throw new Error(data.error);
-
       const price = data.price as number;
       setLtp(price);
-
-      // Auto-set stop loss to 2% below LTP (only if user hasn't typed one)
-      const autoStop = parseFloat((price * 0.98).toFixed(2));
-      setStopLoss(String(autoStop));
+      setStopLoss(String(parseFloat((price * 0.98).toFixed(2))));
     } catch (err) {
       setLtpError(err instanceof Error ? err.message : "Could not fetch price.");
     } finally {
@@ -70,18 +85,50 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     }
   }
 
+  // User selects a suggestion
+  function handleSelect(stock: StockEntry) {
+    const full = `${stock.symbol}.${stock.exchange}`;
+    setTicker(full);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    fetchLtp(full);
+  }
+
+  // Keyboard navigation inside the dropdown
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showSuggestions) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && activeIndex >= 0) {
+      e.preventDefault();
+      handleSelect(suggestions[activeIndex]);
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false);
+    }
+  }
+
+  async function handleTickerBlur() {
+    // Small delay so click on suggestion fires before blur closes it
+    await new Promise((r) => setTimeout(r, 150));
+    setShowSuggestions(false);
+    if (!ltp && ticker.trim()) fetchLtp(ticker);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     e.stopPropagation();
     onSubmit({
-      ticker:     ticker.trim(),
-      stopLoss:   parseFloat(stopLoss),
-      capital:    parseFloat(capital),
+      ticker:      ticker.trim(),
+      stopLoss:    parseFloat(stopLoss),
+      capital:     parseFloat(capital),
       riskPercent: parseFloat(riskPercent),
     });
   }
 
-  // Build the hint line shown below the ticker input
   const tickerHint: React.ReactNode = ltpLoading ? (
     <span className="text-blue-400">Fetching price…</span>
   ) : ltpError ? (
@@ -92,29 +139,64 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       {" · "}Stop loss auto-set to 2% below LTP
     </span>
   ) : (
-    "e.g. RELIANCE, TCS, INFY — tab out after typing to fetch price"
+    "Type a symbol or company name — select exchange (.NS / .BO)"
   );
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
+      {/* Ticker with autocomplete */}
       <Field label="Stock Ticker" hint={tickerHint}>
-        <input
-          type="text"
-          className={inputClass}
-          placeholder="e.g. RELIANCE"
-          value={ticker}
-          onChange={(e) => { setTicker(e.target.value.toUpperCase()); setLtp(null); }}
-          onBlur={handleTickerBlur}
-          disabled={isLoading}
-          required
-        />
+        <div ref={wrapperRef} className="relative">
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="e.g. RELIANCE or Tata"
+            value={ticker}
+            onChange={(e) => handleTickerChange(e.target.value)}
+            onBlur={handleTickerBlur}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading}
+            autoComplete="off"
+            required
+          />
+
+          {/* Dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border border-slate-600 bg-slate-900 shadow-xl overflow-hidden">
+              {suggestions.map((s, i) => (
+                <li
+                  key={`${s.symbol}-${s.exchange}`}
+                  onMouseDown={() => handleSelect(s)} // mousedown fires before blur
+                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors text-sm ${
+                    i === activeIndex
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-200 hover:bg-slate-800"
+                  }`}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-mono font-semibold">{s.symbol}</span>
+                    <span className={`text-xs ${i === activeIndex ? "text-blue-200" : "text-slate-500"}`}>
+                      {s.name}
+                    </span>
+                  </div>
+                  {/* Exchange badge */}
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+                    s.exchange === "NS"
+                      ? "border-emerald-600 text-emerald-400 bg-emerald-900/30"
+                      : "border-amber-600 text-amber-400 bg-amber-900/30"
+                  }`}>
+                    .{s.exchange}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </Field>
 
-      <Field
-        label="Stop Loss (₹)"
-        hint="Auto-set to 2% below LTP — you can override this"
-      >
+      <Field label="Stop Loss (₹)" hint="Auto-set to 2% below LTP — you can override">
         <input
           type="number"
           className={inputClass}
@@ -122,8 +204,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
           value={stopLoss}
           onChange={(e) => setStopLoss(e.target.value)}
           disabled={isLoading}
-          min="0.01"
-          step="0.01"
+          min="0.01" step="0.01"
           required
         />
       </Field>
@@ -136,8 +217,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
           value={capital}
           onChange={(e) => setCapital(e.target.value)}
           disabled={isLoading}
-          min="1"
-          step="1"
+          min="1" step="1"
           required
         />
       </Field>
@@ -151,9 +231,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             value={riskPercent}
             onChange={(e) => setRiskPercent(e.target.value)}
             disabled={isLoading}
-            min="0.1"
-            max="100"
-            step="0.1"
+            min="0.1" max="100" step="0.1"
             required
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">
@@ -165,12 +243,10 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       <button
         type="submit"
         disabled={isLoading || ltpLoading}
-        className="
-          mt-2 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold
+        className="mt-2 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold
           text-white transition-all hover:bg-blue-500 active:scale-[0.98]
           disabled:opacity-50 disabled:cursor-not-allowed
-          focus:outline-none focus:ring-2 focus:ring-blue-400
-        "
+          focus:outline-none focus:ring-2 focus:ring-blue-400"
       >
         {isLoading ? (
           <span className="flex items-center justify-center gap-2">
