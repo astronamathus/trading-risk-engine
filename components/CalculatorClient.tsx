@@ -55,7 +55,7 @@ export default function CalculatorClient() {
       setStatus("error");
       return;
     }
-
+    //Loading status
     setStatus("loading");
 
     try {
