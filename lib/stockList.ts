@@ -39,7 +39,7 @@ export const STOCK_LIST: StockEntry[] = [
   { symbol: "TECHM",         name: "Tech Mahindra",               exchange: "NS" },
   { symbol: "HCLTECH",       name: "HCL Technologies",            exchange: "NS" },
   { symbol: "JSWSTEEL",      name: "JSW Steel",                   exchange: "NS" },
-  { symbol: "TATAMOTORS",    name: "Tata Motors",                 exchange: "NS" },
+  { symbol: "TATAMOTORS",    name: "Tata Motors",                 exchange: "BO" },
   { symbol: "TATASTEEL",     name: "Tata Steel",                  exchange: "NS" },
   { symbol: "ADANIENT",      name: "Adani Enterprises",           exchange: "NS" },
   { symbol: "ADANIPORTS",    name: "Adani Ports & SEZ",           exchange: "NS" },

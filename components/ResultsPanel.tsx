@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CalculationResult } from "@/types";
 import { recalculateWithCapitalLimit } from "@/lib/calculations";
 
@@ -17,50 +17,89 @@ function formatINR(v: number) {
   }).format(v);
 }
 
-function Tile({ label, value, sub, highlight = false, tooltip }: {
+function Tile({ label, value, sub, highlight = false, warn = false, tooltip }: {
   label: string; value: string; sub?: React.ReactNode;
-  highlight?: boolean; tooltip?: string;
+  highlight?: boolean; warn?: boolean; tooltip?: string;
 }) {
   return (
-    <div title={tooltip} className={`rounded-xl border p-4 flex flex-col gap-1 ${
+    <div title={tooltip} className={`rounded-xl border p-4 flex flex-col gap-1 transition-colors ${
       highlight
         ? "border-blue-500 bg-blue-950/40 shadow-md shadow-blue-900/30"
-        : "border-slate-700 bg-slate-800/60"
+        : warn
+          ? "border-red-700 bg-red-950/30"
+          : "border-slate-700 bg-slate-800/60"
     }`}>
       <span className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</span>
-      <span className={`text-xl font-bold ${highlight ? "text-blue-300" : "text-slate-100"}`}>{value}</span>
+      <span className={`text-xl font-bold ${
+        highlight ? "text-blue-300" : warn ? "text-red-400" : "text-slate-100"
+      }`}>{value}</span>
       {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
     </div>
   );
 }
 
+const PRESETS = [
+  { label: "5%",   pct: 0.05 },
+  { label: "10%",  pct: 0.10 },
+  { label: "25%",  pct: 0.25 },
+  { label: "50%",  pct: 0.50 },
+  { label: "100%", pct: 1.00 },
+];
+
 export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }: ResultsPanelProps) {
-  const { entryPrice, riskPerShare, maxRiskAmount, positionSize, capitalRequired } = result;
+  const { entryPrice, riskPerShare, maxRiskAmount } = result;
 
-  // Default to "limit" mode
-  const [mode, setMode] = useState<"auto" | "limit">("limit");
+  const defaultLimit = Math.round(totalCapital * 0.10);
+  const [limitValue, setLimitValue]     = useState(defaultLimit);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef                     = useRef<HTMLDivElement>(null);
 
-  // Limit value: editable, defaults to 10% of capital
-  const defaultLimit = Math.round(totalCapital * 0.1);
-  const [limitValue, setLimitValue] = useState(defaultLimit);
-
-  // Keep limit in sync if totalCapital changes (new calculation)
+  // Reset when a new calculation comes in
   useEffect(() => {
-    setLimitValue(Math.round(totalCapital * 0.1));
-    setMode("limit");
+    setLimitValue(Math.round(totalCapital * 0.10));
   }, [totalCapital, result]);
 
-  const display = mode === "limit"
-    ? recalculateWithCapitalLimit(limitValue, entryPrice, riskPerShare)
-    : {
-        positionSize,
-        actualRisk:      parseFloat((riskPerShare * positionSize).toFixed(2)),
-        capitalRequired,
-      };
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node))
+        setDropdownOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // ALL modes go through recalculateWithCapitalLimit — no special "auto" path.
+  // "100%" just sets limitValue = totalCapital.
+  const display = recalculateWithCapitalLimit(limitValue, entryPrice, riskPerShare);
+  const riskExceedsMax = display.actualRisk > maxRiskAmount;
 
   const fetchTime = fetchedAt.toLocaleTimeString("en-IN", {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
+
+  const pctOfCapital = (limitValue / totalCapital) * 100;
+
+  // Active preset: whichever pct matches current limitValue
+  const activePreset = PRESETS.find(
+    p => Math.round(totalCapital * p.pct) === limitValue
+  ) ?? null;
+
+  const triggerLabel = activePreset
+    ? activePreset.label
+    : `${pctOfCapital.toFixed(1)}%`;
+
+  function applyPreset(pct: number) {
+    // For 100%, set exactly to totalCapital (avoids rounding stopping short)
+    setLimitValue(pct === 1 ? totalCapital : Math.round(totalCapital * pct));
+    setDropdownOpen(false);
+  }
+
+  function handleSliderChange(raw: number) {
+    // Snap the top of the slider exactly to totalCapital
+    const val = raw >= totalCapital - 500 ? totalCapital : raw;
+    setLimitValue(val);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,105 +126,143 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
           label="Position Size"
           value={`${display.positionSize.toLocaleString("en-IN")} shares`}
           highlight
-          tooltip="Shares you can buy within your risk/capital limit"
+          tooltip="Shares you can buy within your capital limit"
         />
 
-        {/* Risk Amount — actual / max style */}
-        <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Risk Amount</span>
+        {/* Risk Amount tile — turns red if actual > max */}
+        <div className={`rounded-xl border p-4 flex flex-col gap-1 transition-colors ${
+          riskExceedsMax
+            ? "border-red-700 bg-red-950/30"
+            : "border-slate-700 bg-slate-800/60"
+        }`}>
+          <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+            Risk Amount
+          </span>
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            {/* Actual */}
-            <span className="text-xl font-bold text-slate-100">
+            <span className={`text-xl font-bold ${riskExceedsMax ? "text-red-400" : "text-slate-100"}`}>
               {formatINR(display.actualRisk)}
             </span>
-            {/* Max — faded */}
-            <span className="text-sm text-slate-500">
-              / {formatINR(maxRiskAmount)}
-            </span>
+            <span className="text-sm text-slate-500">/ {formatINR(maxRiskAmount)}</span>
           </div>
-          <div className="flex gap-2 mt-0.5">
+          <div className="flex items-center gap-1 mt-0.5">
             <span className="text-xs text-slate-500">actual / max</span>
+            {riskExceedsMax && (
+              <span className="text-xs text-red-400 font-medium">· exceeds limit</span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Capital Required with mode toggle + editable limit */}
+      {/* Capital Required with dropdown */}
       <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 flex flex-col gap-3">
 
-        {/* Header row */}
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
             Capital Required
           </span>
-          <div className="flex rounded-lg overflow-hidden border border-slate-600 text-xs font-medium">
-            {(["limit", "auto"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`px-3 py-1 capitalize transition-colors ${
-                  mode === m
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-800 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {m}
-              </button>
-            ))}
+
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(o => !o)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-600
+                bg-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-200
+                hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <svg className="w-3 h-3 text-slate-400" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="4" r="1.5" fill="currentColor"/>
+                <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+                <circle cx="8" cy="12" r="1.5" fill="currentColor"/>
+              </svg>
+              Limit: {triggerLabel}
+              <svg className={`w-3 h-3 text-slate-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
+                viewBox="0 0 16 16" fill="none">
+                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-xl border border-slate-600
+                bg-slate-900 shadow-2xl shadow-black/40 p-3 flex flex-col gap-3">
+
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">Quick presets</p>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {PRESETS.map(p => {
+                      const isActive = activePreset?.label === p.label;
+                      return (
+                        <button
+                          key={p.label}
+                          onClick={() => applyPreset(p.pct)}
+                          className={`rounded-lg py-1.5 text-xs font-medium transition-colors
+                            focus:outline-none focus:ring-2 focus:ring-blue-500
+                            ${isActive
+                              ? "bg-blue-600 text-white border border-blue-500"
+                              : "border border-slate-600 text-slate-300 hover:bg-slate-700"
+                            }`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-700" />
+
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-slate-500">Custom limit</p>
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-600
+                    bg-slate-800 px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500
+                    focus-within:border-transparent transition-all">
+                    <span className="text-sm text-slate-400 select-none">₹</span>
+                    <input
+                      type="number"
+                      value={limitValue}
+                      min={Math.ceil(entryPrice)}
+                      max={totalCapital}
+                      step={500}
+                      onChange={e => {
+                        const v = parseFloat(e.target.value) || 0;
+                        setLimitValue(Math.max(Math.ceil(entryPrice), Math.min(totalCapital, v)));
+                      }}
+                      className="flex-1 bg-transparent text-sm text-slate-100
+                        focus:outline-none min-w-0"
+                    />
+                    <span className="text-xs text-slate-500 whitespace-nowrap">
+                      {pctOfCapital.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min={Math.ceil(entryPrice)}
+                    max={totalCapital}
+                    step={500}
+                    value={limitValue}
+                    onChange={e => handleSliderChange(parseFloat(e.target.value))}
+                    className="w-full accent-blue-500 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>₹{Math.ceil(entryPrice).toLocaleString("en-IN")}</span>
+                    <span>₹{totalCapital.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Value */}
         <span className="text-2xl font-bold text-slate-100">
           {formatINR(display.capitalRequired)}
         </span>
 
-        {/* Editable limit — only shown in limit mode */}
-        {mode === "limit" && (
-          <div className="flex flex-col gap-2 pt-1 border-t border-slate-700">
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Capital limit</span>
-              <div className="flex items-center gap-1">
-                <span className="text-slate-500">₹</span>
-                <input
-                  type="number"
-                  value={limitValue}
-                  onChange={(e) => setLimitValue(Math.max(1, parseFloat(e.target.value) || 1))}
-                  className="w-24 rounded-md border border-slate-600 bg-slate-900 px-2 py-0.5
-                    text-slate-100 text-xs text-right focus:outline-none focus:ring-1
-                    focus:ring-blue-500"
-                  min={1}
-                  step={1000}
-                />
-              </div>
-            </div>
-            {/* Slider: range 0 to totalCapital */}
-            <input
-              type="range"
-              min={entryPrice}           // minimum: enough to buy 1 share
-              max={totalCapital}
-              step={1000}
-              value={limitValue}
-              onChange={(e) => setLimitValue(parseFloat(e.target.value))}
-              className="w-full accent-blue-500 cursor-pointer"
-            />
-            <div className="flex justify-between text-xs text-slate-600">
-              <span>₹{entryPrice.toLocaleString("en-IN")}</span>
-              <span className="text-slate-500">
-                default {formatINR(defaultLimit)} (10%)
-              </span>
-              <span>₹{totalCapital.toLocaleString("en-IN")}</span>
-            </div>
-          </div>
-        )}
-
-        {mode === "auto" && (
-          <span className="text-xs text-slate-500 italic">
-            Full capital needed for this position
-          </span>
-        )}
-
+        <span className="text-xs text-slate-500 italic">
+          {limitValue === totalCapital
+            ? "Using full capital for this position"
+            : `Capped at ${formatINR(limitValue)} (${pctOfCapital.toFixed(1)}% of capital)`}
+        </span>
       </div>
-
     </div>
   );
 }

@@ -64,11 +64,16 @@ export default function CalculatorClient() {
       {/* Right: Results card — always rendered, shows placeholder when idle */}
       <section className="rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur p-6 shadow-xl min-h-[200px]">
 
-        {/* Error state */}
+        {/* Error state — shown alongside idle placeholder so form stays usable */}
         {status === "error" && error && (
-          <div className="rounded-xl border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300 flex gap-2 items-start">
-            <span className="mt-0.5">⚠</span>
-            <span>{error}</span>
+          <div className="flex flex-col gap-3">
+            <div className="rounded-xl border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300 flex gap-2 items-start">
+              <span className="mt-0.5">⚠</span>
+              <span>{error}</span>
+            </div>
+            <p className="text-xs text-slate-500 text-center">
+              Edit the form and try again.
+            </p>
           </div>
         )}
 

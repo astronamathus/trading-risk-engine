@@ -136,7 +136,6 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   ) : ltp ? (
     <span className="text-emerald-400">
       LTP: ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-      {" · "}Stop loss auto-set to 2% below LTP
     </span>
   ) : (
     "Type a symbol or company name — select exchange (.NS / .BO)"
