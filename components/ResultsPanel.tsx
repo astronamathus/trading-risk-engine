@@ -52,6 +52,8 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
   const { entryPrice, riskPerShare, maxRiskAmount } = result;
 
   const defaultLimit = Math.round(totalCapital * 0.10);
+
+  // ── NEW: mode state ─────────────────────────────────────────
   const [mode, setMode]                 = useState<CapitalMode>("limit");
   const [limitValue, setLimitValue]     = useState(defaultLimit);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -62,8 +64,17 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
   // `result` or `totalCapital`, which cause re-renders and would
   // instantly flip Auto back to limit every time you click it.
   useEffect(() => {
-    setLimitValue(Math.round(totalCapital * 0.10));
-    setMode("limit");
+    const tenPctLimit = Math.round(totalCapital * 0.10);
+    setLimitValue(tenPctLimit);
+
+    // Check if 10% limit would cause risk to exceed the user's risk budget.
+    // If so, default to Auto so the user isn't shown a dangerous position.
+    const limitedDisplay = recalculateWithCapitalLimit(tenPctLimit, entryPrice, riskPerShare);
+    if (limitedDisplay.actualRisk > maxRiskAmount) {
+      setMode("auto");
+    } else {
+      setMode("limit");
+    }
   }, [fetchedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close dropdown on outside click
