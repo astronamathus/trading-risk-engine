@@ -38,17 +38,16 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const [ltpError,   setLtpError]   = useState<string | null>(null);
 
   // Autocomplete state
-  const [suggestions,    setSuggestions]    = useState<StockEntry[]>([]);
+  const [suggestions,     setSuggestions]     = useState<StockEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [activeIndex,    setActiveIndex]    = useState(-1); // keyboard nav
+  const [activeIndex,     setActiveIndex]     = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node))
         setShowSuggestions(false);
-      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -60,7 +59,6 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     setLtp(null);
     setLtpError(null);
     setActiveIndex(-1);
-
     const results = searchStocks(upper);
     setSuggestions(results);
     setShowSuggestions(results.length > 0);
@@ -75,9 +73,8 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       const res  = await fetch(`/api/stock-price?ticker=${encodeURIComponent(rawTicker)}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
-      const price = data.price as number;
-      setLtp(price);
-      setStopLoss(String(parseFloat((price * 0.98).toFixed(2))));
+      setLtp(data.price as number);
+      // ← setStopLoss removed: stop loss is now always entered manually
     } catch (err) {
       setLtpError(err instanceof Error ? err.message : "Could not fetch price.");
     } finally {
@@ -85,7 +82,6 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     }
   }
 
-  // User selects a suggestion
   function handleSelect(stock: StockEntry) {
     const full = `${stock.symbol}.${stock.exchange}`;
     setTicker(full);
@@ -94,15 +90,14 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     fetchLtp(full);
   }
 
-  // Keyboard navigation inside the dropdown
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!showSuggestions) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+      setActiveIndex(i => Math.min(i + 1, suggestions.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, 0));
+      setActiveIndex(i => Math.max(i - 1, 0));
     } else if (e.key === "Enter" && activeIndex >= 0) {
       e.preventDefault();
       handleSelect(suggestions[activeIndex]);
@@ -112,8 +107,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   }
 
   async function handleTickerBlur() {
-    // Small delay so click on suggestion fires before blur closes it
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 150));
     setShowSuggestions(false);
     if (!ltp && ticker.trim()) fetchLtp(ticker);
   }
@@ -144,7 +138,6 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-      {/* Ticker with autocomplete */}
       <Field label="Stock Ticker" hint={tickerHint}>
         <div ref={wrapperRef} className="relative">
           <input
@@ -152,7 +145,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             className={inputClass}
             placeholder="e.g. RELIANCE or Tata"
             value={ticker}
-            onChange={(e) => handleTickerChange(e.target.value)}
+            onChange={e => handleTickerChange(e.target.value)}
             onBlur={handleTickerBlur}
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             onKeyDown={handleKeyDown}
@@ -161,17 +154,14 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             required
           />
 
-          {/* Dropdown */}
           {showSuggestions && suggestions.length > 0 && (
             <ul className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border border-slate-600 bg-slate-900 shadow-xl overflow-hidden">
               {suggestions.map((s, i) => (
                 <li
                   key={`${s.symbol}-${s.exchange}`}
-                  onMouseDown={() => handleSelect(s)} // mousedown fires before blur
+                  onMouseDown={() => handleSelect(s)}
                   className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors text-sm ${
-                    i === activeIndex
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-200 hover:bg-slate-800"
+                    i === activeIndex ? "bg-blue-600 text-white" : "text-slate-200 hover:bg-slate-800"
                   }`}
                 >
                   <div className="flex flex-col">
@@ -180,7 +170,6 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                       {s.name}
                     </span>
                   </div>
-                  {/* Exchange badge */}
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
                     s.exchange === "NS"
                       ? "border-emerald-600 text-emerald-400 bg-emerald-900/30"
@@ -195,15 +184,19 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
         </div>
       </Field>
 
-      <Field label="Stop Loss (₹)" hint="Auto-set to 2% below LTP — you can override">
+      <Field
+        label="Stop Loss (₹)"
+        hint="The price at which you'll cut your loss and exit the trade if it moves against you."
+      >
         <input
           type="number"
           className={inputClass}
           placeholder="e.g. 2300"
           value={stopLoss}
-          onChange={(e) => setStopLoss(e.target.value)}
+          onChange={e => setStopLoss(e.target.value)}
           disabled={isLoading}
-          min="0.01" step="0.01"
+          min="0.01"
+          step="0.01"
           required
         />
       </Field>
@@ -214,9 +207,10 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
           className={inputClass}
           placeholder="e.g. 100000"
           value={capital}
-          onChange={(e) => setCapital(e.target.value)}
+          onChange={e => setCapital(e.target.value)}
           disabled={isLoading}
-          min="1" step="1"
+          min="1"
+          step="1"
           required
         />
       </Field>
@@ -228,9 +222,11 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             className={inputClass + " pr-8"}
             placeholder="e.g. 1"
             value={riskPercent}
-            onChange={(e) => setRiskPercent(e.target.value)}
+            onChange={e => setRiskPercent(e.target.value)}
             disabled={isLoading}
-            min="0.1" max="100" step="0.1"
+            min="0.1"
+            max="100"
+            step="0.1"
             required
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">
