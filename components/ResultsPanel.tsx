@@ -52,11 +52,6 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
   const { entryPrice, riskPerShare, maxRiskAmount } = result;
 
   const defaultLimit = Math.round(totalCapital * 0.10);
-<<<<<<< HEAD
-=======
-
-  // ── NEW: mode state ─────────────────────────────────────────
->>>>>>> ab22286 (Fixed auto mode bug)
   const [mode, setMode]                 = useState<CapitalMode>("limit");
   const [limitValue, setLimitValue]     = useState(defaultLimit);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -100,18 +95,11 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
   const pctOfCapital = (limitValue / totalCapital) * 100;
 
-<<<<<<< HEAD
-  const activePreset = mode === "auto"
-    ? null
-    : PRESETS.find(p => Math.round(totalCapital * p.pct) === limitValue) ?? null;
-
-=======
   const activePreset = mode === "limit"
     ? PRESETS.find(p => Math.round(totalCapital * p.pct) === limitValue) ?? null
     : null;
 
   // Trigger label: "Auto", preset label, or custom %
->>>>>>> ab22286 (Fixed auto mode bug)
   const triggerLabel = mode === "auto"
     ? "Auto"
     : activePreset
@@ -212,25 +200,15 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
                   <p className="text-xs text-slate-500 mb-2">Mode</p>
                   <button
                     onClick={() => { setMode("auto"); setDropdownOpen(false); }}
-<<<<<<< HEAD
-                    className={`w-full rounded-lg py-1.5 px-3 text-xs font-medium text-left
-                      transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500
-                      flex items-center justify-between
-=======
                     className={`w-full flex items-center justify-between rounded-lg px-3 py-2
                       text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500
->>>>>>> ab22286 (Fixed auto mode bug)
                       ${mode === "auto"
                         ? "bg-blue-600 text-white border border-blue-500"
                         : "border border-slate-600 text-slate-300 hover:bg-slate-700"
                       }`}
                   >
                     <span>Auto</span>
-<<<<<<< HEAD
-                    <span className={`text-xs ${mode === "auto" ? "text-blue-200" : "text-slate-500"}`}>
-=======
                     <span className={`${mode === "auto" ? "text-blue-200" : "text-slate-500"}`}>
->>>>>>> ab22286 (Fixed auto mode bug)
                       sized by risk rule
                     </span>
                   </button>
@@ -238,14 +216,9 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
                 <div className="border-t border-slate-700" />
 
-<<<<<<< HEAD
-                <div>
-                  <p className="text-xs text-slate-500 mb-2">Capital limit presets</p>
-=======
                 {/* Presets — clicking any switches back to limit mode */}
                 <div>
                   <p className="text-xs text-slate-500 mb-2">Capital limit</p>
->>>>>>> ab22286 (Fixed auto mode bug)
                   <div className="grid grid-cols-5 gap-1.5">
                     {PRESETS.map(p => {
                       const isActive = mode === "limit" && activePreset?.label === p.label;
@@ -323,11 +296,7 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
         <span className="text-xs text-slate-500 italic">
           {mode === "auto"
-<<<<<<< HEAD
-            ? "Sized purely by your risk rule (capital × risk% ÷ risk per share)"
-=======
             ? "Sized by risk rule — capital × risk% ÷ risk per share"
->>>>>>> ab22286 (Fixed auto mode bug)
             : limitValue === totalCapital
               ? "Using full capital for this position"
               : `Capped at ${formatINR(limitValue)} (${pctOfCapital.toFixed(1)}% of capital)`}
