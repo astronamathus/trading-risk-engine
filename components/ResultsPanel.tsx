@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { CalculationResult } from "@/types";
 import { recalculateWithCapitalLimit } from "@/lib/calculations";
+import { ExchangeBadge } from "@/components/CalculatorForm"; // ← fixes "Cannot find name"
 
 interface ResultsPanelProps {
   result:       CalculationResult;
   ticker:       string;
   totalCapital: number;
-  fetchedAt:    Date;  // used as reset signal — must be passed from CalculatorClient
+  fetchedAt:    Date;
+  exchange:     "NSE" | "BSE"; // ← fixes "Property does not exist"
 }
 
 function formatINR(v: number) {
@@ -48,36 +50,24 @@ const PRESETS = [
 
 type CapitalMode = "auto" | "limit";
 
-export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }: ResultsPanelProps) {
+export default function ResultsPanel({
+  result, ticker, totalCapital, fetchedAt, exchange,
+}: ResultsPanelProps) {
   const { entryPrice, riskPerShare, maxRiskAmount } = result;
 
   const defaultLimit = Math.round(totalCapital * 0.10);
-
-  // ── NEW: mode state ─────────────────────────────────────────
   const [mode, setMode]                 = useState<CapitalMode>("limit");
   const [limitValue, setLimitValue]     = useState(defaultLimit);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef                     = useRef<HTMLDivElement>(null);
 
-  // Reset when a NEW calculation is submitted.
-  // We depend on fetchedAt (a new Date() per submission) — NOT on
-  // `result` or `totalCapital`, which cause re-renders and would
-  // instantly flip Auto back to limit every time you click it.
   useEffect(() => {
     const tenPctLimit = Math.round(totalCapital * 0.10);
     setLimitValue(tenPctLimit);
-
-    // Check if 10% limit would cause risk to exceed the user's risk budget.
-    // If so, default to Auto so the user isn't shown a dangerous position.
     const limitedDisplay = recalculateWithCapitalLimit(tenPctLimit, entryPrice, riskPerShare);
-    if (limitedDisplay.actualRisk > maxRiskAmount) {
-      setMode("auto");
-    } else {
-      setMode("limit");
-    }
+    setMode(limitedDisplay.actualRisk > maxRiskAmount ? "auto" : "limit");
   }, [fetchedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node))
@@ -87,9 +77,6 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── NEW: display switches on mode ───────────────────────────
-  // Auto  → sized by risk rule (capital × risk% ÷ risk/share)
-  // Limit → sized by how much capital you deploy
   const display = mode === "auto"
     ? {
         positionSize:    result.positionSize,
@@ -104,18 +91,13 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 
-  const pctOfCapital = (limitValue / totalCapital) * 100;
-
-  const activePreset = mode === "limit"
+  const pctOfCapital  = (limitValue / totalCapital) * 100;
+  const activePreset  = mode === "limit"
     ? PRESETS.find(p => Math.round(totalCapital * p.pct) === limitValue) ?? null
     : null;
-
-  // Trigger label: "Auto", preset label, or custom %
-  const triggerLabel = mode === "auto"
+  const triggerLabel  = mode === "auto"
     ? "Auto"
-    : activePreset
-      ? activePreset.label
-      : `${pctOfCapital.toFixed(1)}%`;
+    : activePreset ? activePreset.label : `${pctOfCapital.toFixed(1)}%`;
 
   function applyPreset(pct: number) {
     setMode("limit");
@@ -124,8 +106,7 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
   }
 
   function handleSliderChange(raw: number) {
-    const val = raw >= totalCapital - 500 ? totalCapital : raw;
-    setLimitValue(val);
+    setLimitValue(raw >= totalCapital - 500 ? totalCapital : raw);
   }
 
   return (
@@ -133,9 +114,12 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-200">
-          <span className="text-blue-400 font-mono">{ticker.toUpperCase()}</span>
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-200">
+            <span className="text-blue-400 font-mono">{ticker.toUpperCase()}</span>
+          </h2>
+          <ExchangeBadge exchange={exchange} />
+        </div>
         <span className="text-xs text-slate-600" title="Time price was last fetched">
           fetched {fetchTime}
         </span>
@@ -143,8 +127,8 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
       {/* Row 1: Entry Price | Risk Per Share */}
       <div className="grid grid-cols-2 gap-3">
-        <Tile label="Entry Price"    value={formatINR(entryPrice)}   tooltip="Current market price fetched live" />
-        <Tile label="Risk Per Share" value={formatINR(riskPerShare)}  tooltip="Entry Price − Stop Loss" />
+        <Tile label="Entry Price"    value={formatINR(entryPrice)}  tooltip="Current market price fetched live" />
+        <Tile label="Risk Per Share" value={formatINR(riskPerShare)} tooltip="Entry Price − Stop Loss" />
       </div>
 
       {/* Row 2: Position Size | Risk Amount */}
@@ -206,7 +190,6 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
               <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-xl border border-slate-600
                 bg-slate-900 shadow-2xl shadow-black/40 p-3 flex flex-col gap-3">
 
-                {/* ── NEW: Auto option ── */}
                 <div>
                   <p className="text-xs text-slate-500 mb-2">Mode</p>
                   <button
@@ -219,7 +202,7 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
                       }`}
                   >
                     <span>Auto</span>
-                    <span className={`${mode === "auto" ? "text-blue-200" : "text-slate-500"}`}>
+                    <span className={mode === "auto" ? "text-blue-200" : "text-slate-500"}>
                       sized by risk rule
                     </span>
                   </button>
@@ -227,7 +210,6 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
                 <div className="border-t border-slate-700" />
 
-                {/* Presets — clicking any switches back to limit mode */}
                 <div>
                   <p className="text-xs text-slate-500 mb-2">Capital limit</p>
                   <div className="grid grid-cols-5 gap-1.5">
@@ -253,7 +235,6 @@ export default function ResultsPanel({ result, ticker, totalCapital, fetchedAt }
 
                 <div className="border-t border-slate-700" />
 
-                {/* Custom input + slider — always visible, clicking activates limit mode */}
                 <div className="flex flex-col gap-2">
                   <p className="text-xs text-slate-500">Custom limit</p>
                   <div className="flex items-center gap-2 rounded-lg border border-slate-600

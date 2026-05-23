@@ -2,7 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CalculatorInputs } from "@/types";
-import { SearchResult } from "@/app/api/search-stocks/route";
+
+// Inline type — avoids importing from a server route file
+interface SearchResult {
+  symbol:   string;   // e.g. "RELIANCE.BSE" or "TCS.BSE"
+  name:     string;   // e.g. "Reliance Industries"
+  exchange: "NSE" | "BSE";
+}
 
 interface CalculatorFormProps {
   onSubmit:  (inputs: CalculatorInputs) => void;
@@ -26,6 +32,19 @@ const inputClass =
   "placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 " +
   "focus:border-transparent transition-all text-sm";
 
+// Exchange badge colours — reused in dropdown and results header
+export function ExchangeBadge({ exchange }: { exchange: "NSE" | "BSE" }) {
+  return (
+    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+      exchange === "NSE"
+        ? "border-emerald-600 text-emerald-400 bg-emerald-900/30"
+        : "border-amber-600  text-amber-400  bg-amber-900/30"
+    }`}>
+      {exchange}
+    </span>
+  );
+}
+
 export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormProps) {
   const [ticker,      setTicker]      = useState("");
   const [stopLoss,    setStopLoss]    = useState("");
@@ -37,11 +56,15 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const [ltpLoading, setLtpLoading] = useState(false);
   const [ltpError,   setLtpError]   = useState<string | null>(null);
 
-  // Live search state
+  // Search state
   const [suggestions,     setSuggestions]     = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLoading,   setSearchLoading]   = useState(false);
   const [activeIndex,     setActiveIndex]     = useState(-1);
+
+  // Track selected exchange so LTP hint can show the badge
+  const [selectedExchange, setSelectedExchange] = useState<"NSE" | "BSE" | null>(null);
+
   const wrapperRef  = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -55,14 +78,12 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Debounced live search — fires 350ms after user stops typing
   const searchTickers = useCallback(async (query: string) => {
     if (query.length < 1) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
-
     setSearchLoading(true);
     try {
       const res  = await fetch(`/api/search-stocks?q=${encodeURIComponent(query)}`);
@@ -82,14 +103,16 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   }, []);
 
   function handleTickerChange(val: string) {
-    setTicker(val);
+    // Always uppercase as user types
+    const upper = val.toUpperCase();
+    setTicker(upper);
     setLtp(null);
     setLtpError(null);
     setActiveIndex(-1);
+    setSelectedExchange(null);
 
-    // Debounce: wait 350ms before hitting the search API
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => searchTickers(val.trim()), 350);
+    debounceRef.current = setTimeout(() => searchTickers(upper.trim()), 350);
   }
 
   async function fetchLtp(rawTicker: string) {
@@ -110,7 +133,8 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   }
 
   function handleSelect(stock: SearchResult) {
-    setTicker(stock.symbol);
+    setTicker(stock.symbol.toUpperCase());
+    setSelectedExchange(stock.exchange);
     setSuggestions([]);
     setShowSuggestions(false);
     fetchLtp(stock.symbol);
@@ -149,16 +173,20 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     });
   }
 
+  // LTP hint line — shows exchange badge alongside the price
   const tickerHint: React.ReactNode = ltpLoading ? (
     <span className="text-blue-400">Fetching price…</span>
   ) : ltpError ? (
     <span className="text-red-400">{ltpError}</span>
   ) : ltp ? (
-    <span className="text-emerald-400">
-      LTP: ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    <span className="flex items-center gap-1.5">
+      {selectedExchange && <ExchangeBadge exchange={selectedExchange} />}
+      <span className="text-emerald-400">
+        LTP: ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </span>
     </span>
   ) : (
-    "Type a company name or symbol — results load from Alpha Vantage"
+    "Type a company name or NSE/BSE symbol"
   );
 
   return (
@@ -180,7 +208,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             required
           />
 
-          {/* Search loading spinner inside the input */}
+          {/* Spinner while search API is in flight */}
           {searchLoading && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <svg className="animate-spin h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none">
@@ -190,7 +218,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             </div>
           )}
 
-          {/* Dropdown */}
+          {/* Suggestions dropdown */}
           {showSuggestions && suggestions.length > 0 && (
             <ul className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border
               border-slate-600 bg-slate-900 shadow-xl overflow-hidden">
@@ -211,10 +239,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                       {s.name}
                     </span>
                   </div>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border
-                    border-emerald-600 text-emerald-400 bg-emerald-900/30`}>
-                    {s.exchange}
-                  </span>
+                  <ExchangeBadge exchange={s.exchange} />
                 </li>
               ))}
             </ul>
@@ -262,9 +287,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             value={riskPercent}
             onChange={e => setRiskPercent(e.target.value)}
             disabled={isLoading}
-            min="0.1"
-            max="100"
-            step="0.1"
+            min="0.1" max="100" step="0.1"
             required
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">

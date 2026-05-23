@@ -11,8 +11,9 @@ export default function CalculatorClient() {
   const [error, setError]                   = useState<string | null>(null);
   const [result, setResult]                 = useState<CalculationResult | null>(null);
   const [submittedTicker, setSubmittedTicker] = useState<string>("");
-  const [totalCapital, setTotalCapital]     = useState<number>(0);
-  const [fetchedAt, setFetchedAt]           = useState<Date | null>(null); // timestamp
+  const [totalCapital, setTotalCapital]       = useState<number>(0);
+  const [fetchedAt, setFetchedAt]             = useState<Date | null>(null);
+  const [exchange, setExchange]               = useState<"NSE" | "BSE">("NSE"); // timestamp
 
   async function handleCalculate(inputs: CalculatorInputs) {
     setError(null);
@@ -38,7 +39,9 @@ export default function CalculatorClient() {
       setResult(calculationResult);
       setSubmittedTicker(data.ticker);
       setTotalCapital(inputs.capital);
-      setFetchedAt(new Date()); // record the moment price was fetched
+      setFetchedAt(new Date());
+      // Detect exchange from the ticker suffix returned by the API
+      setExchange(data.ticker?.endsWith(".BSE") ? "BSE" : "NSE"); // record the moment price was fetched
       setStatus("success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -105,6 +108,7 @@ export default function CalculatorClient() {
             ticker={submittedTicker}
             totalCapital={totalCapital}
             fetchedAt={fetchedAt!}
+            exchange={exchange}
           />
         )}
 
