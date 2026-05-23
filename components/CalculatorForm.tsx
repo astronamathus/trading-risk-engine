@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CalculatorInputs } from "@/types";
+import { searchNifty100, NseStock } from "@/lib/nifty100";
 
-// Inline type — avoids importing from a server route file
-interface SearchResult {
-  symbol:   string;   // e.g. "RELIANCE.BSE" or "TCS.BSE"
-  name:     string;   // e.g. "Reliance Industries"
+// Unified suggestion shape for the dropdown
+interface Suggestion {
+  symbol:   string;
+  name:     string;
   exchange: "NSE" | "BSE";
 }
 
@@ -27,12 +28,7 @@ function Field({ label, hint, children }: {
   );
 }
 
-const inputClass =
-  "w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 " +
-  "placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 " +
-  "focus:border-transparent transition-all text-sm";
-
-// Exchange badge colours — reused in dropdown and results header
+// Exported so ResultsPanel can reuse it
 export function ExchangeBadge({ exchange }: { exchange: "NSE" | "BSE" }) {
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
@@ -45,6 +41,11 @@ export function ExchangeBadge({ exchange }: { exchange: "NSE" | "BSE" }) {
   );
 }
 
+const inputClass =
+  "w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 " +
+  "placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 " +
+  "focus:border-transparent transition-all text-sm";
+
 export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormProps) {
   const [ticker,      setTicker]      = useState("");
   const [stopLoss,    setStopLoss]    = useState("");
@@ -56,13 +57,11 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const [ltpLoading, setLtpLoading] = useState(false);
   const [ltpError,   setLtpError]   = useState<string | null>(null);
 
-  // Search state
-  const [suggestions,     setSuggestions]     = useState<SearchResult[]>([]);
+  // Unified suggestion list — NSE entries arrive instantly, BSE appended after 350ms
+  const [suggestions,     setSuggestions]     = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchLoading,   setSearchLoading]   = useState(false);
+  const [bseLoading,      setBseLoading]      = useState(false);
   const [activeIndex,     setActiveIndex]     = useState(-1);
-
-  // Track selected exchange so LTP hint can show the badge
   const [selectedExchange, setSelectedExchange] = useState<"NSE" | "BSE" | null>(null);
 
   const wrapperRef  = useRef<HTMLDivElement>(null);
@@ -78,32 +77,13 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const searchTickers = useCallback(async (query: string) => {
-    if (query.length < 1) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    setSearchLoading(true);
-    try {
-      const res  = await fetch(`/api/search-stocks?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      if (data.results?.length > 0) {
-        setSuggestions(data.results);
-        setShowSuggestions(true);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    } catch {
-      setSuggestions([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  }, []);
-
-  function handleTickerChange(val: string) {
-    // Always uppercase as user types
+  /**
+   * Hybrid search:
+   * 1. NSE results from Nifty 100 list — synchronous, instant
+   * 2. BSE results from Alpha Vantage API — async, debounced 350ms
+   * Both are merged into `suggestions`, NSE first.
+   */
+  const handleTickerChange = useCallback((val: string) => {
     const upper = val.toUpperCase();
     setTicker(upper);
     setLtp(null);
@@ -111,9 +91,51 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     setActiveIndex(-1);
     setSelectedExchange(null);
 
+    if (!upper.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    // ── Step 1: NSE results instantly from local list ──
+    const nseResults: Suggestion[] = searchNifty100(upper, 5).map(s => ({
+      symbol:   `${s.symbol}.NS`,
+      name:     s.name,
+      exchange: "NSE" as const,
+    }));
+
+    setSuggestions(nseResults);
+    setShowSuggestions(nseResults.length > 0);
+
+    // ── Step 2: BSE results from Alpha Vantage after 350ms ──
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => searchTickers(upper.trim()), 350);
-  }
+    debounceRef.current = setTimeout(async () => {
+      setBseLoading(true);
+      try {
+        const res  = await fetch(`/api/search-stocks?q=${encodeURIComponent(upper)}`);
+        const data = await res.json();
+
+        if (data.results?.length > 0) {
+          // Merge: keep current NSE results, append BSE below
+          setSuggestions(prev => {
+            const bse = (data.results as Suggestion[]).filter(
+              r => r.exchange === "BSE"
+            );
+            // Deduplicate by symbol
+            const existing = new Set(prev.map(s => s.symbol));
+            const newBse   = bse.filter(s => !existing.has(s.symbol));
+            const merged   = [...prev, ...newBse].slice(0, 8);
+            if (merged.length > 0) setShowSuggestions(true);
+            return merged;
+          });
+        }
+      } catch {
+        // BSE search failure is silent — NSE results already shown
+      } finally {
+        setBseLoading(false);
+      }
+    }, 350);
+  }, []);
 
   async function fetchLtp(rawTicker: string) {
     if (!rawTicker.trim()) return;
@@ -132,12 +154,12 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     }
   }
 
-  function handleSelect(stock: SearchResult) {
-    setTicker(stock.symbol.toUpperCase());
-    setSelectedExchange(stock.exchange);
+  function handleSelect(s: Suggestion) {
+    setTicker(s.symbol);
+    setSelectedExchange(s.exchange);
     setSuggestions([]);
     setShowSuggestions(false);
-    fetchLtp(stock.symbol);
+    fetchLtp(s.symbol);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -173,7 +195,6 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     });
   }
 
-  // LTP hint line — shows exchange badge alongside the price
   const tickerHint: React.ReactNode = ltpLoading ? (
     <span className="text-blue-400">Fetching price…</span>
   ) : ltpError ? (
@@ -186,7 +207,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       </span>
     </span>
   ) : (
-    "Type a company name or NSE/BSE symbol"
+    "Type a company name or symbol — NSE results appear instantly"
   );
 
   return (
@@ -208,10 +229,11 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             required
           />
 
-          {/* Spinner while search API is in flight */}
-          {searchLoading && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <svg className="animate-spin h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none">
+          {/* BSE loading indicator — subtle dot in corner */}
+          {bseLoading && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2"
+              title="Loading BSE results…">
+              <svg className="animate-spin h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
               </svg>
@@ -222,6 +244,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
           {showSuggestions && suggestions.length > 0 && (
             <ul className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border
               border-slate-600 bg-slate-900 shadow-xl overflow-hidden">
+
               {suggestions.map((s, i) => (
                 <li
                   key={s.symbol}
@@ -242,6 +265,17 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                   <ExchangeBadge exchange={s.exchange} />
                 </li>
               ))}
+
+              {/* BSE loading row at the bottom */}
+              {bseLoading && (
+                <li className="flex items-center gap-2 px-3 py-2 text-xs text-amber-400/70 border-t border-slate-800">
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Loading BSE results…
+                </li>
+              )}
             </ul>
           )}
         </div>
@@ -258,8 +292,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
           value={stopLoss}
           onChange={e => setStopLoss(e.target.value)}
           disabled={isLoading}
-          min="0.01"
-          step="0.01"
+          min="0.01" step="0.01"
           required
         />
       </Field>
@@ -272,8 +305,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
           value={capital}
           onChange={e => setCapital(e.target.value)}
           disabled={isLoading}
-          min="1"
-          step="1"
+          min="1" step="1"
           required
         />
       </Field>
