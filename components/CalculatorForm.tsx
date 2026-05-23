@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { CalculatorInputs } from "@/types";
-import { searchStocks, StockEntry } from "@/lib/stockList";
+import { SearchResult } from "@/app/api/search-stocks/route";
 
 interface CalculatorFormProps {
   onSubmit:  (inputs: CalculatorInputs) => void;
@@ -37,31 +37,59 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const [ltpLoading, setLtpLoading] = useState(false);
   const [ltpError,   setLtpError]   = useState<string | null>(null);
 
-  // Autocomplete state
-  const [suggestions,     setSuggestions]     = useState<StockEntry[]>([]);
+  // Live search state
+  const [suggestions,     setSuggestions]     = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading,   setSearchLoading]   = useState(false);
   const [activeIndex,     setActiveIndex]     = useState(-1);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const wrapperRef  = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdown on outside click
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handler(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node))
         setShowSuggestions(false);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Debounced live search — fires 350ms after user stops typing
+  const searchTickers = useCallback(async (query: string) => {
+    if (query.length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const res  = await fetch(`/api/search-stocks?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data.results?.length > 0) {
+        setSuggestions(data.results);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSearchLoading(false);
+    }
   }, []);
 
   function handleTickerChange(val: string) {
-    const upper = val.toUpperCase();
-    setTicker(upper);
+    setTicker(val);
     setLtp(null);
     setLtpError(null);
     setActiveIndex(-1);
-    const results = searchStocks(upper);
-    setSuggestions(results);
-    setShowSuggestions(results.length > 0);
+
+    // Debounce: wait 350ms before hitting the search API
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => searchTickers(val.trim()), 350);
   }
 
   async function fetchLtp(rawTicker: string) {
@@ -74,7 +102,6 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setLtp(data.price as number);
-      // ← setStopLoss removed: stop loss is now always entered manually
     } catch (err) {
       setLtpError(err instanceof Error ? err.message : "Could not fetch price.");
     } finally {
@@ -82,12 +109,11 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     }
   }
 
-  function handleSelect(stock: StockEntry) {
-    const full = `${stock.symbol}.${stock.exchange}`;
-    setTicker(full);
+  function handleSelect(stock: SearchResult) {
+    setTicker(stock.symbol);
     setSuggestions([]);
     setShowSuggestions(false);
-    fetchLtp(full);
+    fetchLtp(stock.symbol);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -132,7 +158,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       LTP: ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
     </span>
   ) : (
-    "Type a symbol or company name — select exchange (.NS / .BO)"
+    "Type a company name or symbol — results load from Alpha Vantage"
   );
 
   return (
@@ -143,7 +169,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
           <input
             type="text"
             className={inputClass}
-            placeholder="e.g. RELIANCE or Tata"
+            placeholder="e.g. RELIANCE or Tata Consultancy"
             value={ticker}
             onChange={e => handleTickerChange(e.target.value)}
             onBlur={handleTickerBlur}
@@ -154,14 +180,29 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
             required
           />
 
+          {/* Search loading spinner inside the input */}
+          {searchLoading && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <svg className="animate-spin h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+            </div>
+          )}
+
+          {/* Dropdown */}
           {showSuggestions && suggestions.length > 0 && (
-            <ul className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border border-slate-600 bg-slate-900 shadow-xl overflow-hidden">
+            <ul className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border
+              border-slate-600 bg-slate-900 shadow-xl overflow-hidden">
               {suggestions.map((s, i) => (
                 <li
-                  key={`${s.symbol}-${s.exchange}`}
+                  key={s.symbol}
                   onMouseDown={() => handleSelect(s)}
-                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors text-sm ${
-                    i === activeIndex ? "bg-blue-600 text-white" : "text-slate-200 hover:bg-slate-800"
+                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer
+                    transition-colors text-sm ${
+                    i === activeIndex
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-200 hover:bg-slate-800"
                   }`}
                 >
                   <div className="flex flex-col">
@@ -170,12 +211,9 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                       {s.name}
                     </span>
                   </div>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
-                    s.exchange === "NS"
-                      ? "border-emerald-600 text-emerald-400 bg-emerald-900/30"
-                      : "border-amber-600 text-amber-400 bg-amber-900/30"
-                  }`}>
-                    .{s.exchange}
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border
+                    border-emerald-600 text-emerald-400 bg-emerald-900/30`}>
+                    {s.exchange}
                   </span>
                 </li>
               ))}
@@ -246,8 +284,8 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
         {isLoading ? (
           <span className="flex items-center justify-center gap-2">
             <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
             </svg>
             Calculating…
           </span>
