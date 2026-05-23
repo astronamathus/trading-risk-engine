@@ -29,7 +29,7 @@ export default function CalculatorClient() {
     setStatus("loading");
 
     try {
-      const res  = await fetch(`/api/stock-price?ticker=${encodeURIComponent(inputs.ticker)}`);
+      const res  = await fetch(`/api/search-stocks?ticker=${encodeURIComponent(inputs.ticker)}`);
       const data = await res.json();
 
       if (!data.success) throw new Error(data.error || "Failed to fetch price.");
