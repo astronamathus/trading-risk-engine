@@ -143,7 +143,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     setLtpError(null);
     setLtp(null);
     try {
-      const res  = await fetch(`/api/stock-price?ticker=${encodeURIComponent(rawTicker)}`);
+      const res  = await fetch(`/api/search-stocks?ticker=${encodeURIComponent(rawTicker)}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setLtp(data.price as number);

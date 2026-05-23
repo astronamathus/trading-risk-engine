@@ -5,10 +5,27 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { fetchStockPrice, formatTicker } from "@/lib/pricing";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  const ticker = searchParams.get("ticker")?.trim();
   const q = searchParams.get("q")?.trim();
+
+  // Price mode (used by calculator + LTP fetch): /api/search-stocks?ticker=RELIANCE.BSE
+  if (ticker) {
+    try {
+      const price = await fetchStockPrice(ticker);
+      return NextResponse.json({
+        success: true,
+        ticker: formatTicker(ticker),
+        price,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch stock price.";
+      return NextResponse.json({ success: false, error: message }, { status: 502 });
+    }
+  }
 
   if (!q || q.length < 1) return NextResponse.json({ results: [] });
 
