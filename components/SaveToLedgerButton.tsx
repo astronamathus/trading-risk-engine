@@ -1,0 +1,97 @@
+// ============================================================
+// components/SaveToLedgerButton.tsx
+// Saves the current calculation to the trade ledger.
+// Shows a brief success/error toast after saving.
+// ============================================================
+
+"use client";
+
+import { useState } from "react";
+import { saveTrade } from "@/lib/db/trades";
+import { CalculationResult } from "@/types";
+
+interface SaveToLedgerButtonProps {
+  userId:  string | null;   // null = user not yet loaded
+  ticker:  string;
+  result:  CalculationResult;
+  onSaved: () => void;      // callback so Ledger can refresh
+}
+
+type ToastState = "idle" | "saving" | "success" | "error";
+
+export default function SaveToLedgerButton({
+  userId, ticker, result, onSaved,
+}: SaveToLedgerButtonProps) {
+  const [toast, setToast] = useState<ToastState>("idle");
+
+  async function handleSave() {
+    if (!userId) return;
+
+    setToast("saving");
+    try {
+      await saveTrade({
+        user_id:     userId,
+        ticker:      ticker,
+        entry_price: result.entryPrice,
+        stop_loss:   result.entryPrice - result.riskPerShare, // reverse-derive stop loss
+        quantity:    result.positionSize,
+        risk_amount: result.maxRiskAmount,
+      });
+
+      setToast("success");
+      onSaved(); // tell parent to refresh ledger
+      setTimeout(() => setToast("idle"), 3000);
+    } catch (err) {
+      console.error(err);
+      setToast("error");
+      setTimeout(() => setToast("idle"), 3000);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        onClick={handleSave}
+        disabled={!userId || toast === "saving"}
+        className="
+          w-full rounded-lg border border-slate-600 bg-slate-700/60 px-4 py-2.5
+          text-sm font-medium text-slate-200 transition-all
+          hover:bg-slate-700 hover:border-slate-500
+          disabled:opacity-40 disabled:cursor-not-allowed
+          focus:outline-none focus:ring-2 focus:ring-blue-500
+          flex items-center justify-center gap-2
+        "
+      >
+        {toast === "saving" ? (
+          <>
+            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            Saving…
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2v8M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            Add to Ledger
+          </>
+        )}
+      </button>
+
+      {/* Toast messages */}
+      {toast === "success" && (
+        <p className="text-xs text-emerald-400 text-center">
+          ✓ Trade saved to ledger
+        </p>
+      )}
+      {toast === "error" && (
+        <p className="text-xs text-red-400 text-center">
+          ✗ Failed to save — try again
+        </p>
+      )}
+    </div>
+  );
+}
