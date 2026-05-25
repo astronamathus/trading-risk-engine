@@ -64,8 +64,15 @@ export default function ResultsPanel({
   useEffect(() => {
     const tenPctLimit = Math.round(totalCapital * 0.10);
     setLimitValue(tenPctLimit);
-    const limitedDisplay = recalculateWithCapitalLimit(tenPctLimit, entryPrice, riskPerShare);
-    setMode(limitedDisplay.actualRisk > maxRiskAmount ? "auto" : "limit");
+
+    // Switch to Auto if:
+    // 1. Can't afford even 1 share at the 10% limit, OR
+    // 2. 10% limit position would exceed the risk budget
+    const canAffordOneShare = tenPctLimit >= entryPrice;
+    const limitedDisplay    = recalculateWithCapitalLimit(tenPctLimit, entryPrice, riskPerShare);
+    const riskExceeded      = limitedDisplay.actualRisk > maxRiskAmount;
+
+    setMode(!canAffordOneShare || riskExceeded ? "auto" : "limit");
   }, [fetchedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

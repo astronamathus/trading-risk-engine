@@ -138,7 +138,7 @@ export default function Ledger({ trades, onRefresh }: LedgerProps) {
               <th className="text-right px-4 py-3">Entry</th>
               <th className="text-right px-4 py-3">Stop Loss</th>
               <th className="text-right px-4 py-3">Qty</th>
-              <th className="text-right px-4 py-3">Risk</th>
+              <th className="text-right px-4 py-3">Value</th>
               <th className="text-center px-4 py-3">Status</th>
               <th className="text-right px-4 py-3">Actions</th>
             </tr>
@@ -170,8 +170,8 @@ export default function Ledger({ trades, onRefresh }: LedgerProps) {
                   <td className="px-4 py-3 text-right text-slate-300 tabular-nums">
                     {trade.quantity.toLocaleString("en-IN")}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-400 tabular-nums">
-                    {trade.risk_amount ? formatINR(trade.risk_amount) : "—"}
+                  <td className="px-4 py-3 text-right text-slate-300 tabular-nums">
+                    {formatINR(trade.entry_price * trade.quantity)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <StatusBadge status={trade.status} />
