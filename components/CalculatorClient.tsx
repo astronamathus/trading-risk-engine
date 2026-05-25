@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import CalculatorForm     from "@/components/CalculatorForm";
 import ResultsPanel       from "@/components/ResultsPanel";
 import SaveToLedgerButton from "@/components/SaveToLedgerButton";
-import { validateInputs, calculatePosition } from "@/lib/calculations";
+import { validateInputs, calculatePosition, validateStopLoss } from "@/lib/calculations";
 import { CalculatorInputs, CalculationResult, AppStatus } from "@/types";
 import { getAnonymousId, ensureUser } from "@/lib/user";
 
@@ -64,6 +64,15 @@ export default function CalculatorClient() {
 
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Failed to fetch price.");
+
+      // Validate stop loss against live price + risk budget before calculating
+      const slError = validateStopLoss(
+        inputs.stopLoss,
+        data.price,
+        inputs.capital,
+        inputs.riskPercent
+      );
+      if (slError) throw new Error(slError);
 
       const calculationResult = calculatePosition(inputs, data.price);
 

@@ -1,41 +1,86 @@
 // ============================================================
 // lib/calculations.ts
 // Pure math. No React. No API calls. Just functions.
-// This is your "calculation engine" — easy to test in isolation.
+// All names match types/index.ts and CalculatorClient.tsx exactly.
 // ============================================================
 
-import { CalculatorInputs, CalculationResult } from "@/types";
+import { CalculatorInputs, CalculationResult } from "@/types/index";
 
+// ── Individual formula functions ─────────────────────────────
+// Kept separate so each can be unit-tested independently.
+
+/** Entry Price − Stop Loss */
+export function calculateRiskPerShare(entryPrice: number, stopLoss: number): number {
+  return entryPrice - stopLoss;
+}
+
+/** Capital × (Risk% / 100) */
+export function calculateMaxRiskAmount(capital: number, riskPercent: number): number {
+  return capital * (riskPercent / 100);
+}
+
+/** floor(Max Risk Amount / Risk Per Share) — whole shares only */
+export function calculatePositionSizeFromRisk(maxRiskAmount: number, riskPerShare: number): number {
+  if (riskPerShare <= 0) throw new Error("Risk per share must be greater than zero.");
+  return Math.floor(maxRiskAmount / riskPerShare);
+}
+
+/** Position Size × Entry Price */
+export function calculateCapitalRequired(positionSize: number, entryPrice: number): number {
+  return positionSize * entryPrice;
+}
+
+// ── Validation ───────────────────────────────────────────────
 /**
- * Validates user inputs before we run calculations.
- * Returns an error message string, or null if inputs are valid.
+ * Returns the first validation error as a string, or null if valid.
+ * Caller pattern: const err = validateInputs(i); if (err) { ... }
  *
- * Why separate validation? So the UI can show field-level errors
- * without running any math or API calls.
+ * Why string | null and not string[]?
+ * Our UI shows one error at a time. A single string keeps the
+ * caller simple — no array iteration needed.
  */
 export function validateInputs(inputs: CalculatorInputs): string | null {
   const { ticker, stopLoss, capital, riskPercent } = inputs;
 
-  if (!ticker.trim()) return "Please enter a stock ticker.";
-  if (stopLoss <= 0) return "Stop loss must be greater than zero.";
-  if (capital <= 0) return "Capital must be greater than zero.";
-  if (riskPercent <= 0 || riskPercent > 100)
-    return "Risk percentage must be between 0 and 100.";
+  if (!ticker.trim())                         return "Please enter a stock ticker.";
+  if (stopLoss <= 0)                          return "Stop loss must be greater than zero.";
+  if (capital <= 0)                           return "Capital must be greater than zero.";
+  if (riskPercent <= 0 || riskPercent > 100)  return "Risk percentage must be between 0 and 100.";
 
-  return null; // null = no error = valid
+  return null;
 }
 
 /**
- * Core calculation function.
+ * Validates stop loss against the live entry price and risk budget.
+ * Called after price is fetched, before calculatePosition.
+ */
+export function validateStopLoss(
+  stopLoss: number,
+  entryPrice: number,
+  capital: number,
+  riskPercent: number
+): string | null {
+  if (stopLoss >= entryPrice)
+    return `Stop loss (₹${stopLoss}) must be below the current price (₹${entryPrice.toFixed(2)}).`;
+
+  const maxRisk    = capital * (riskPercent / 100);
+  const riskPerSh  = entryPrice - stopLoss;
+  const impliedQty = maxRisk / riskPerSh;
+
+  // If even 1 share's risk exceeds the budget, the stop loss is too tight
+  if (riskPerSh > maxRisk)
+    return `Stop loss is too close to price — risk per share (₹${riskPerSh.toFixed(2)}) exceeds your max risk budget (₹${maxRisk.toFixed(2)}). Widen your stop loss or increase capital.`;
+
+  return null;
+}
+
+// ── Main calculation ─────────────────────────────────────────
+/**
+ * Takes validated user inputs + live entry price.
+ * Returns a complete CalculationResult.
  *
- * Takes validated inputs + the live entry price,
- * returns a complete CalculationResult object.
- *
- * Formula recap:
- *   Risk Per Share   = Entry Price - Stop Loss
- *   Max Risk Amount  = Capital × (Risk% / 100)
- *   Position Size    = Max Risk Amount / Risk Per Share
- *   Capital Required = Position Size × Entry Price
+ * Called as: calculatePosition(inputs, data.price)
+ * in CalculatorClient.tsx — name and signature must stay stable.
  */
 export function calculatePosition(
   inputs: CalculatorInputs,
@@ -43,35 +88,29 @@ export function calculatePosition(
 ): CalculationResult {
   const { stopLoss, capital, riskPercent } = inputs;
 
-  const riskPerShare = entryPrice - stopLoss;
+  const riskPerShare = calculateRiskPerShare(entryPrice, stopLoss);
 
-  // Edge case: if stop loss >= entry price, the trade makes no sense.
-  // We guard this here so the UI never shows nonsense results.
   if (riskPerShare <= 0) {
-    throw new Error(
-      "Stop loss must be lower than the current market price."
-    );
+    throw new Error("Stop loss must be lower than the current market price.");
   }
 
-  const maxRiskAmount = capital * (riskPercent / 100);
-  const positionSize = maxRiskAmount / riskPerShare;
-  const capitalRequired = positionSize * entryPrice;
+  const maxRiskAmount   = calculateMaxRiskAmount(capital, riskPercent);
+  const positionSize    = calculatePositionSizeFromRisk(maxRiskAmount, riskPerShare);
+  const capitalRequired = round(calculateCapitalRequired(positionSize, entryPrice));
 
-  // Math.floor on positionSize: you can't buy 12.7 shares.
-  // Round down to be conservative (less risk).
   return {
-    entryPrice,
-    riskPerShare: round(riskPerShare),
+    entryPrice,          // ← required: ResultsPanel reads result.entryPrice
+    riskPerShare:  round(riskPerShare),
     maxRiskAmount: round(maxRiskAmount),
-    positionSize: Math.floor(positionSize), // whole shares only
-    capitalRequired: round(Math.floor(positionSize) * entryPrice),
+    positionSize,
+    capitalRequired,
   };
 }
 
+// ── Capital-limited recalculation ────────────────────────────
 /**
- * Recalculates position size when capital is capped to a limit.
- * e.g. if limit = ₹10,000 and entry = ₹2,450 → 4 shares max.
- * Returns updated positionSize, actualRisk, and capitalRequired.
+ * Used by ResultsPanel when mode = "limit".
+ * Answers: "if I can only spend ₹X, how many shares can I buy?"
  */
 export function recalculateWithCapitalLimit(
   limitCapital: number,
@@ -84,10 +123,7 @@ export function recalculateWithCapitalLimit(
   return { positionSize, actualRisk, capitalRequired };
 }
 
-/**
- * Utility: rounds a number to 2 decimal places.
- * Keeps financial output clean (₹ values).
- */
+// ── Utility ──────────────────────────────────────────────────
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
