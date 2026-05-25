@@ -71,7 +71,17 @@ export default function CalculatorClient() {
     setStatus("loading");
 
     try {
-      const res  = await fetch(`/api/stock-price?ticker=${encodeURIComponent(inputs.ticker)}`);
+      const res  = await fetch(`/api/search-stocks?ticker=${encodeURIComponent(inputs.ticker)}`);
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const body = await res.text();
+        throw new Error(
+          `API returned non-JSON response (HTTP ${res.status}). ` +
+          `This usually means the route failed or returned an HTML error page. ` +
+          `Response starts with: ${body.slice(0, 80)}`
+        );
+      }
+
       const data = await res.json();
 
       if (!data.success) throw new Error(data.error || "Failed to fetch price.");

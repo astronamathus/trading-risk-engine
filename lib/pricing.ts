@@ -106,8 +106,12 @@ async function fetchFromYahoo(ticker: string): Promise<number> {
 
 /** Fetch live price from Alpha Vantage — for BSE stocks */
 async function fetchFromAlphaVantage(ticker: string): Promise<number> {
-  const apiKey = process.env.ALPHA_VANTAGE_KEY;
-  if (!apiKey) throw new Error("ALPHA_VANTAGE_KEY not set in .env.local");
+  const apiKey = process.env.ALPHA_VANTAGE_KEY || process.env.ALPHA_VANTAGE_SEARCH_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Alpha Vantage API key is missing. Set ALPHA_VANTAGE_KEY (or ALPHA_VANTAGE_SEARCH_KEY) in your environment (e.g. Vercel Project Settings → Environment Variables)."
+    );
+  }
 
   const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`;
 
