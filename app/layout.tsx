@@ -1,14 +1,13 @@
 // ============================================================
 // app/layout.tsx
-// Root layout — wraps every page in the app.
-// A good place for: fonts, global metadata, nav, footer shell.
+// Root layout — NavBar appears on every page.
 // ============================================================
 
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import NavBar from "@/components/NavBar";
 
-// Inter is a clean, professional font — ideal for fintech UIs
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -16,14 +15,13 @@ export const metadata: Metadata = {
   description: "Position sizing calculator for Indian equities (NSE/BSE)",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} antialiased`}>{children}</body>
+      <body className={`${inter.className} antialiased bg-slate-900 text-slate-100 min-h-screen`}>
+        <NavBar />
+        {children}
+      </body>
     </html>
   );
 }

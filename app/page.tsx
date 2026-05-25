@@ -1,21 +1,15 @@
 // ============================================================
-// app/page.tsx
-// Server Component — no "use client" here.
-//
-// This file handles layout and static content only.
-// All interactivity is delegated to CalculatorClient.
-// This is the correct Next.js App Router pattern.
+// app/page.tsx — Calculator page (server component shell)
 // ============================================================
 
 import CalculatorClient from "@/components/CalculatorClient";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 px-4 py-10">
+    <main className="px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl flex flex-col gap-8">
 
-        {/* Static header */}
-        <header className="flex flex-col items-center text-center gap-2 pt-4">
+        <header className="flex flex-col items-center text-center gap-2">
           <h1 className="text-4xl font-extrabold tracking-tight text-white">
             Trade Risk Manager
           </h1>
@@ -25,11 +19,10 @@ export default function HomePage() {
           </p>
         </header>
 
-        {/* All interactive logic lives inside here */}
         <CalculatorClient />
 
         <footer className="text-center text-xs text-slate-600">
-          Prices fetched from Yahoo Finance · For educational purposes only
+          Prices via Yahoo Finance (NSE) & Alpha Vantage (BSE) · Educational use only
         </footer>
 
       </div>
