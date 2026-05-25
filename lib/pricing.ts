@@ -42,13 +42,14 @@ export function formatTicker(rawTicker: string): string {
 
 /** Fetch live price from Yahoo Finance — for NSE stocks */
 async function fetchFromYahoo(ticker: string): Promise<number> {
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}&fields=regularMarketPrice`;
+  const quoteUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}&fields=regularMarketPrice`;
+  const chartUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
 
   const controller = new AbortController();
   const timeout    = setTimeout(() => controller.abort(), 10000);
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(quoteUrl, {
       signal: controller.signal,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -58,7 +59,33 @@ async function fetchFromYahoo(ticker: string): Promise<number> {
     });
     clearTimeout(timeout);
 
-    if (!res.ok) throw new Error(`Yahoo Finance returned HTTP ${res.status}`);
+    // Yahoo occasionally blocks /quote with 401 in some regions/environments.
+    // Fallback to the chart endpoint, which is often more permissive.
+    if (!res.ok) {
+      if (res.status === 401) {
+        const chartRes = await fetch(chartUrl, {
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+            "Referer": "https://finance.yahoo.com/",
+          },
+        });
+
+        if (!chartRes.ok) {
+          throw new Error(`Yahoo Finance returned HTTP ${res.status} (quote) and ${chartRes.status} (chart)`);
+        }
+
+        const chartData = await chartRes.json();
+        const chartPrice = chartData?.chart?.result?.[0]?.meta?.regularMarketPrice as number | undefined;
+        if (!chartPrice || chartPrice <= 0) {
+          throw new Error(`No price found for "${ticker}". Check the NSE symbol.`);
+        }
+        return chartPrice;
+      }
+
+      throw new Error(`Yahoo Finance returned HTTP ${res.status}`);
+    }
 
     const data  = await res.json();
     const price = data?.quoteResponse?.result?.[0]?.regularMarketPrice as number | undefined;
@@ -79,8 +106,12 @@ async function fetchFromYahoo(ticker: string): Promise<number> {
 
 /** Fetch live price from Alpha Vantage — for BSE stocks */
 async function fetchFromAlphaVantage(ticker: string): Promise<number> {
-  const apiKey = process.env.ALPHA_VANTAGE_KEY;
-  if (!apiKey) throw new Error("ALPHA_VANTAGE_KEY not set in .env.local");
+  const apiKey = process.env.ALPHA_VANTAGE_KEY || process.env.ALPHA_VANTAGE_SEARCH_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Alpha Vantage API key is missing. Set ALPHA_VANTAGE_KEY (or ALPHA_VANTAGE_SEARCH_KEY) in your environment (e.g. Vercel Project Settings → Environment Variables)."
+    );
+  }
 
   const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`;
 

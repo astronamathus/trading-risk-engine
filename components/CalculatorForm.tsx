@@ -111,9 +111,11 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setBseLoading(true);
-      try {
-        const res  = await fetch(`/api/search-stocks?q=${encodeURIComponent(upper)}`);
-        const data = await res.json();
+    try {
+      const res  = await fetch(`/api/search-stocks?q=${encodeURIComponent(upper)}`);
+      const searchCt = res.headers.get("content-type") || "";
+      if (!searchCt.includes("application/json")) return;
+      const data = await res.json();
 
         if (data.results?.length > 0) {
           // Merge: keep current NSE results, append BSE below
@@ -143,7 +145,16 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     setLtpError(null);
     setLtp(null);
     try {
-      const res  = await fetch(`/api/stock-price?ticker=${encodeURIComponent(rawTicker)}`);
+      const res  = await fetch(`/api/search-stocks?ticker=${encodeURIComponent(rawTicker)}`);
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const body = await res.text();
+        throw new Error(
+          `API returned non-JSON response (HTTP ${res.status}). ` +
+          `Expected JSON from /api/search-stocks, got HTML/text instead. ` +
+          `Response starts with: ${body.slice(0, 80)}`
+        );
+      }
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setLtp(data.price as number);
