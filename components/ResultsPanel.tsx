@@ -84,12 +84,18 @@ export default function ResultsPanel({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Auto: use result.positionSize which is already capped at total capital
+  // in calculatePosition (min of risk-sized and capital-capped).
+  // We recompute capitalRequired from positionSize × entryPrice here
+  // rather than trusting result.capitalRequired, to keep it consistent
+  // with whatever positionSize was actually floored to.
+  const maxAffordable = Math.floor(totalCapital / entryPrice);
+  const autoPosition  = Math.min(result.positionSize, maxAffordable);
+  const autoRisk      = parseFloat((riskPerShare * autoPosition).toFixed(2));
+  const autoCapital   = parseFloat((autoPosition * entryPrice).toFixed(2));
+
   const display = mode === "auto"
-    ? {
-        positionSize:    result.positionSize,
-        actualRisk:      parseFloat((riskPerShare * result.positionSize).toFixed(2)),
-        capitalRequired: parseFloat((result.positionSize * entryPrice).toFixed(2)),
-      }
+    ? { positionSize: autoPosition, actualRisk: autoRisk, capitalRequired: autoCapital }
     : recalculateWithCapitalLimit(limitValue, entryPrice, riskPerShare);
 
   const riskExceedsMax = display.actualRisk > maxRiskAmount;
