@@ -85,7 +85,7 @@ export default function CalculatorClient() {
       setSubmittedTicker(data.ticker);
       setTotalCapital(inputs.capital);
       setFetchedAt(new Date());
-      setExchange(data.ticker?.endsWith(".BSE") ? "BSE" : "NSE");
+      setExchange(data.ticker?.endsWith(".BO") ? "BSE" : "NSE");
       setStatus("success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
