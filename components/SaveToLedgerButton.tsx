@@ -1,9 +1,3 @@
-// ============================================================
-// components/SaveToLedgerButton.tsx
-// Saves the current calculation to the trade ledger.
-// Shows a brief success/error toast after saving.
-// ============================================================
-
 "use client";
 
 import { useState } from "react";
@@ -11,35 +5,35 @@ import { saveTrade } from "@/lib/db/trades";
 import { CalculationResult } from "@/types";
 
 interface SaveToLedgerButtonProps {
-  userId:  string | null;   // null = user not yet loaded
-  ticker:  string;
-  result:  CalculationResult;
-  onSaved: () => void;      // callback so Ledger can refresh
+  userId:       string | null;
+  ticker:       string;
+  result:       CalculationResult;
+  displayedQty:  number;   // exactly what ResultsPanel shows — no recomputing
+  displayedRisk: number;
+  onSaved:      () => void;
 }
 
 type ToastState = "idle" | "saving" | "success" | "error";
 
 export default function SaveToLedgerButton({
-  userId, ticker, result, onSaved,
+  userId, ticker, result, displayedQty, displayedRisk, onSaved,
 }: SaveToLedgerButtonProps) {
   const [toast, setToast] = useState<ToastState>("idle");
 
   async function handleSave() {
     if (!userId) return;
-
     setToast("saving");
     try {
       await saveTrade({
         user_id:     userId,
-        ticker:      ticker,
+        ticker,
         entry_price: result.entryPrice,
-        stop_loss:   result.entryPrice - result.riskPerShare, // reverse-derive stop loss
-        quantity:    result.positionSize,
-        risk_amount: result.maxRiskAmount,
+        stop_loss:   parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
+        quantity:    displayedQty,    // ← exactly what the user saw
+        risk_amount: displayedRisk,   // ← exactly what the user saw
       });
-
       setToast("success");
-      onSaved(); // tell parent to refresh ledger
+      onSaved();
       setTimeout(() => setToast("idle"), 3000);
     } catch (err) {
       console.error(err);
@@ -81,16 +75,11 @@ export default function SaveToLedgerButton({
         )}
       </button>
 
-      {/* Toast messages */}
       {toast === "success" && (
-        <p className="text-xs text-emerald-400 text-center">
-          ✓ Trade saved to ledger
-        </p>
+        <p className="text-xs text-emerald-400 text-center">✓ Trade saved to ledger</p>
       )}
       {toast === "error" && (
-        <p className="text-xs text-red-400 text-center">
-          ✗ Failed to save — try again
-        </p>
+        <p className="text-xs text-red-400 text-center">✗ Failed to save — try again</p>
       )}
     </div>
   );

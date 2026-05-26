@@ -6,11 +6,12 @@ import { recalculateWithCapitalLimit } from "@/lib/calculations";
 import { ExchangeBadge } from "@/components/CalculatorForm"; // ← fixes "Cannot find name"
 
 interface ResultsPanelProps {
-  result:       CalculationResult;
-  ticker:       string;
-  totalCapital: number;
-  fetchedAt:    Date;
-  exchange:     "NSE" | "BSE"; // ← fixes "Property does not exist"
+  result:          CalculationResult;
+  ticker:          string;
+  totalCapital:    number;
+  fetchedAt:       Date;
+  exchange:        "NSE" | "BSE";
+  onDisplayChange: (qty: number, risk: number) => void;
 }
 
 function formatINR(v: number) {
@@ -51,7 +52,7 @@ const PRESETS = [
 type CapitalMode = "auto" | "limit";
 
 export default function ResultsPanel({
-  result, ticker, totalCapital, fetchedAt, exchange,
+  result, ticker, totalCapital, fetchedAt, exchange, onDisplayChange,
 }: ResultsPanelProps) {
   const { entryPrice, riskPerShare, maxRiskAmount } = result;
 
@@ -97,6 +98,12 @@ export default function ResultsPanel({
   const display = mode === "auto"
     ? { positionSize: autoPosition, actualRisk: autoRisk, capitalRequired: autoCapital }
     : recalculateWithCapitalLimit(limitValue, entryPrice, riskPerShare);
+
+  // Notify parent whenever the displayed quantity or risk changes
+  // so SaveToLedgerButton always saves exactly what the user sees
+  useEffect(() => {
+    onDisplayChange(display.positionSize, display.actualRisk);
+  }, [display.positionSize, display.actualRisk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const riskExceedsMax = display.actualRisk > maxRiskAmount;
 

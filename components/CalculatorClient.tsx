@@ -18,6 +18,11 @@ export default function CalculatorClient() {
   const [fetchedAt,        setFetchedAt]        = useState<Date | null>(null);
   const [exchange,         setExchange]         = useState<"NSE" | "BSE">("NSE");
 
+  // Tracks exactly what ResultsPanel is currently displaying
+  // so SaveToLedgerButton saves what the user sees, not a recomputed value
+  const [displayedQty,  setDisplayedQty]  = useState<number>(0);
+  const [displayedRisk, setDisplayedRisk] = useState<number>(0);
+
   // ── User state (for Save to Ledger) ──────────────────────
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -145,12 +150,18 @@ export default function CalculatorClient() {
               totalCapital={totalCapital}
               fetchedAt={fetchedAt!}
               exchange={exchange}
+              onDisplayChange={(qty, risk) => {
+                setDisplayedQty(qty);
+                setDisplayedRisk(risk);
+              }}
             />
             <SaveToLedgerButton
               userId={userId}
               ticker={submittedTicker}
               result={result}
-              onSaved={() => {}}  // no ledger on this page — navigate to /ledger to see it
+              displayedQty={displayedQty}
+              displayedRisk={displayedRisk}
+              onSaved={() => {}}
             />
           </div>
         )}
