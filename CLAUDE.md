@@ -8,6 +8,7 @@ Web-based position sizing calculator for Indian equities (NSE/BSE).
 * Tailwind CSS (dark theme)
 * Yahoo Finance via server-side proxy
 * Vercel deployment target
+* Supabase database
 
 ## Architecture
 
@@ -15,6 +16,7 @@ Web-based position sizing calculator for Indian equities (NSE/BSE).
 * `CalculatorClient.tsx` owns all app state
 * Pure business logic in `lib/calculations.ts`
 * API proxy at `/api/stock-price`
+* Trades stored and displayed in `/app/ledger/page.tsx`
 
 ## Core Flow
 
@@ -23,6 +25,7 @@ Web-based position sizing calculator for Indian equities (NSE/BSE).
 3. Fetch live price from Yahoo Finance
 4. Run position sizing calculations
 5. Render results panel
+6. Add to Ledger
 
 ## Core Formulas
 
@@ -39,10 +42,10 @@ Web-based position sizing calculator for Indian equities (NSE/BSE).
 * Optional capital deployment limits
 * Auto vs Limit sizing modes
 * Mobile responsive layout
+* Persistent trade ledger
 
 ## Conventions
 
-* No database/auth/state library
 * Strict TypeScript types
 * Lifted state pattern
 * API calls only through server routes
@@ -52,6 +55,5 @@ Web-based position sizing calculator for Indian equities (NSE/BSE).
 
 * Yahoo Finance is unofficial
 * Static stock list
-* No persistence/history
 * No brokerage/tax calculations
 * No portfolio-level risk view
