@@ -95,13 +95,15 @@ export default function LedgerPage() {
         </div>
 
         {trades.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
-              text-emerald-400 bg-emerald-900/20">{open} Open</span>
-            <span className="text-xs px-3 py-1 rounded-full border border-slate-600
-              text-slate-400 bg-slate-800">{closed} Closed</span>
-            <span className="text-xs px-3 py-1 rounded-full border border-red-800
-              text-red-400 bg-red-900/20">{stopped} SL Hit</span>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
+              <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
+                text-emerald-400 bg-emerald-900/20">{open} Open</span>
+              <span className="text-xs px-3 py-1 rounded-full border border-slate-600
+                text-slate-400 bg-slate-800">{closed} Closed</span>
+              <span className="text-xs px-3 py-1 rounded-full border border-red-800
+                text-red-400 bg-red-900/20">{stopped} SL Hit</span>
+            </div>
           </div>
         )}
 
