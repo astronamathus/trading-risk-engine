@@ -1,17 +1,16 @@
-// ============================================================
-// components/Ledger.tsx
-// Trade table with status controls and trash-icon delete.
-// ============================================================
-
 "use client";
 
 import { useState } from "react";
 import { Trade, updateTradeStatus, deleteTrade } from "@/lib/db/trades";
 
 interface LedgerProps {
-  trades:    Trade[];
-  onRefresh: () => void;
+  trades:         Trade[];
+  livePrices:     Record<string, number>;  // ticker → live price
+  pricesLoading:  boolean;
+  onRefresh:      () => void;
 }
+
+type PnlMode = "value" | "percent";
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -32,7 +31,6 @@ function StatusBadge({ status }: { status: Trade["status"] }) {
   );
 }
 
-// Minimal trash icon SVG
 function TrashIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -42,15 +40,74 @@ function TrashIcon() {
   );
 }
 
-// Confirmation dialog state per row
+// Up/down arrow — minimal, inline with value
+function PnlArrow({ profit }: { profit: boolean }) {
+  return (
+    <svg className="w-3 h-3 inline-block mr-0.5" viewBox="0 0 12 12" fill="currentColor">
+      {profit
+        ? <path d="M6 2l4 6H2l4-6z"/>        // up triangle
+        : <path d="M6 10L2 4h8L6 10z"/>      // down triangle
+      }
+    </svg>
+  );
+}
+
+// Renders the PnL cell for a single trade
+function PnlCell({
+  trade,
+  ltp,
+  mode,
+  loading,
+}: {
+  trade:   Trade;
+  ltp:     number | undefined;
+  mode:    PnlMode;
+  loading: boolean;
+}) {
+  // Only OPEN trades get live PnL
+  if (trade.status !== "OPEN") {
+    return <span className="text-slate-600 tabular-nums">—</span>;
+  }
+
+  if (loading && ltp === undefined) {
+    return (
+      <span className="text-slate-600 text-xs tabular-nums animate-pulse">
+        fetching…
+      </span>
+    );
+  }
+
+  if (ltp === undefined) {
+    return <span className="text-slate-600 tabular-nums">—</span>;
+  }
+
+  const diff    = ltp - trade.entry_price;
+  const pnlVal  = diff * trade.quantity;
+  const pnlPct  = (diff / trade.entry_price) * 100;
+  const profit  = diff >= 0;
+
+  const colour  = profit ? "text-emerald-400" : "text-red-400";
+  const display = mode === "value"
+    ? `${profit ? "+" : ""}${formatINR(pnlVal)}`
+    : `${profit ? "+" : ""}${pnlPct.toFixed(2)}%`;
+
+  return (
+    <span className={`${colour} tabular-nums font-medium`}>
+      <PnlArrow profit={profit} />
+      {display}
+    </span>
+  );
+}
+
 interface ConfirmState {
   tradeId: string;
   action:  "delete" | "close" | "stop";
 }
 
-export default function Ledger({ trades, onRefresh }: LedgerProps) {
+export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }: LedgerProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [confirm,   setConfirm]   = useState<ConfirmState | null>(null);
+  const [pnlMode,   setPnlMode]   = useState<PnlMode>("value");
 
   async function handleStatus(tradeId: string, status: Trade["status"]) {
     setConfirm(null);
@@ -129,7 +186,6 @@ export default function Ledger({ trades, onRefresh }: LedgerProps) {
         </div>
       )}
 
-      {/* Table — scrollable on mobile */}
       <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-700 bg-slate-800/80">
@@ -139,6 +195,37 @@ export default function Ledger({ trades, onRefresh }: LedgerProps) {
               <th className="text-right px-4 py-3">Stop Loss</th>
               <th className="text-right px-4 py-3">Qty</th>
               <th className="text-right px-4 py-3">Value</th>
+
+              {/* PnL header — clickable toggle */}
+              <th className="text-right px-4 py-3">
+                <div className="flex items-center justify-end gap-1">
+                  <span>PnL</span>
+                  {/* Toggle pill */}
+                  <div className="flex rounded-md overflow-hidden border border-slate-700 ml-1">
+                    <button
+                      onClick={() => setPnlMode("value")}
+                      className={`px-1.5 py-0.5 text-xs transition-colors ${
+                        pnlMode === "value"
+                          ? "bg-slate-600 text-slate-200"
+                          : "text-slate-600 hover:text-slate-400"
+                      }`}
+                    >
+                      ₹
+                    </button>
+                    <button
+                      onClick={() => setPnlMode("percent")}
+                      className={`px-1.5 py-0.5 text-xs transition-colors ${
+                        pnlMode === "percent"
+                          ? "bg-slate-600 text-slate-200"
+                          : "text-slate-600 hover:text-slate-400"
+                      }`}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
+              </th>
+
               <th className="text-center px-4 py-3">Status</th>
               <th className="text-right px-4 py-3">Actions</th>
             </tr>
@@ -146,10 +233,13 @@ export default function Ledger({ trades, onRefresh }: LedgerProps) {
           <tbody className="divide-y divide-slate-800">
             {trades.map(trade => {
               const busy = loadingId === trade.id;
+              const ltp  = livePrices[trade.ticker];
               return (
                 <tr
                   key={trade.id}
-                  className={`transition-opacity hover:bg-slate-800/30 ${busy ? "opacity-40 pointer-events-none" : ""}`}
+                  className={`transition-opacity hover:bg-slate-800/30 ${
+                    busy ? "opacity-40 pointer-events-none" : ""
+                  }`}
                 >
                   <td className="px-4 py-3">
                     <span className="font-mono font-semibold text-slate-200">
@@ -172,6 +262,14 @@ export default function Ledger({ trades, onRefresh }: LedgerProps) {
                   </td>
                   <td className="px-4 py-3 text-right text-slate-300 tabular-nums">
                     {formatINR(trade.entry_price * trade.quantity)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <PnlCell
+                      trade={trade}
+                      ltp={ltp}
+                      mode={pnlMode}
+                      loading={pricesLoading}
+                    />
                   </td>
                   <td className="px-4 py-3 text-center">
                     <StatusBadge status={trade.status} />
@@ -196,7 +294,6 @@ export default function Ledger({ trades, onRefresh }: LedgerProps) {
                           </button>
                         </>
                       )}
-                      {/* Trash icon delete button */}
                       <button
                         onClick={() => setConfirm({ tradeId: trade.id, action: "delete" })}
                         title="Delete trade"
