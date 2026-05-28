@@ -31,6 +31,19 @@ function StatusBadge({ status }: { status: Trade["status"] }) {
   );
 }
 
+// Risk level badge derived from risk% = risk_amount / capital
+function RiskBadge({ riskPct }: { riskPct: number }) {
+  const { label, style } =
+    riskPct < 0.5  ? { label: "LOW",    style: "border-emerald-700 text-emerald-400 bg-emerald-900/20" } :
+    riskPct <= 0.75 ? { label: "MEDIUM", style: "border-yellow-600  text-yellow-400  bg-yellow-900/20"  } :
+                     { label: "HIGH",   style: "border-red-700     text-red-400     bg-red-900/20"     };
+  return (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${style}`}>
+      {label}
+    </span>
+  );
+}
+
 function TrashIcon() {
   return (
     <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -88,33 +101,43 @@ function DetailPanel({ trade, ltp, onAction }: {
   trade: Trade; ltp: number | undefined;
   onAction: (action: "close" | "stop") => void;
 }) {
-  const riskPerShare = trade.entry_price - trade.stop_loss;
-  const target       = trade.entry_price + 2 * riskPerShare;
-  const range        = target - trade.stop_loss;
-  const current      = ltp ?? trade.entry_price;
-  const raw          = ((current - trade.stop_loss) / range) * 100;
-  const progress     = Math.max(0, Math.min(100, raw));
+  const riskPerShare  = trade.entry_price - trade.stop_loss;
+  const target        = trade.entry_price + 2 * riskPerShare;
+  const current       = ltp ?? trade.entry_price;
 
-  // Entry marker sits at exactly 1/3 of the bar (SL→Entry = 1R, Entry→Target = 2R)
-  const entryPct     = (riskPerShare / range) * 100; // = 33.33%
+  // Progress bar: SL=0%, Entry=33.3%, Target=100%
+  const range         = target - trade.stop_loss;        // 3R
+  const entryPct      = (riskPerShare / range) * 100;    // always 33.33%
+  const raw           = ((current - trade.stop_loss) / range) * 100;
+  const progress      = Math.max(0, Math.min(100, raw));
+  const barColour     = current >= trade.entry_price ? "bg-emerald-500" : "bg-red-500";
 
-  const distToSL     = current - trade.stop_loss;
-  const distToTarget = target - current;
-  const atEntry      = Math.abs(current - trade.entry_price) < 0.01;
-  const aboveEntry   = current > trade.entry_price;
+  // Progress label
+  const atEntry       = Math.abs(current - trade.entry_price) < 0.01;
+  const aboveEntry    = current > trade.entry_price;
 
-  // Progress bar label
-  const progressLabel = atEntry
-    ? "Breakeven"
-    : aboveEntry
-      ? `${((distToTarget / (2 * riskPerShare)) * 100).toFixed(1)}% to Target`
-      : `${((distToSL / riskPerShare) * 100).toFixed(1)}% to Stop Loss`;
+  // Target % = ((LTP - Entry) / (Target - Entry)) * 100
+  const toPctTarget   = ((current - trade.entry_price) / (target - trade.entry_price)) * 100;
+  // SL % = ((Entry - LTP) / (Entry - SL)) * 100
+  const toPctSL       = ((trade.entry_price - current) / riskPerShare) * 100;
 
-  const progressColour = atEntry
-    ? "text-slate-400"
-    : aboveEntry ? "text-emerald-400" : "text-red-400";
+  const progressLabel =
+    atEntry    ? "Breakeven" :
+    aboveEntry ? `${toPctTarget.toFixed(1)}% to Target` :
+                 `${toPctSL.toFixed(1)}% to Stop Loss`;
 
-  const barColour = current >= trade.entry_price ? "bg-emerald-500" : "bg-red-500";
+  const progressColour =
+    atEntry    ? "text-slate-400" :
+    aboveEntry ? "text-emerald-400" :
+                 "text-red-400";
+
+  // Risk badge: risk_amount / capital
+  const capital      = trade.capital ?? 100000;
+  const riskPct      = trade.risk_amount ? (trade.risk_amount / capital) * 100 : 0;
+
+  // Unrealised PnL
+  const unrealisedPnl = ltp !== undefined ? (ltp - trade.entry_price) * trade.quantity : null;
+  const pnlPositive   = unrealisedPnl !== null && unrealisedPnl >= 0;
 
   // Days held
   const daysHeld = Math.floor(
@@ -125,13 +148,14 @@ function DetailPanel({ trade, ltp, onAction }: {
     <td colSpan={8} className="px-4 pb-4 pt-0">
       <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 flex flex-col gap-4 mt-1">
 
-        {/* Key prices */}
-        <div className="grid grid-cols-4 gap-3 text-xs">
+        {/* Key prices — Entry | SL | Target | LTP | R:R */}
+        <div className="grid grid-cols-5 gap-3 text-xs">
           {[
-            { label: "Entry",     value: formatINR(trade.entry_price), colour: "text-slate-300"  },
-            { label: "Stop Loss", value: formatINR(trade.stop_loss),   colour: "text-red-400"    },
-            { label: "Target",    value: formatINR(target),            colour: "text-emerald-400"},
-            { label: "LTP",       value: ltp ? formatINR(ltp) : "—",  colour: "text-blue-300"   },
+            { label: "Entry",     value: formatINR(trade.entry_price), colour: "text-slate-300"   },
+            { label: "Stop Loss", value: formatINR(trade.stop_loss),   colour: "text-red-400"     },
+            { label: "Target",    value: formatINR(target),            colour: "text-emerald-400" },
+            { label: "LTP",       value: ltp ? formatINR(ltp) : "—",  colour: "text-blue-300"    },
+            { label: "R:R",       value: "1 : 2",                      colour: "text-slate-300"   },
           ].map(({ label, value, colour }) => (
             <div key={label} className="flex flex-col gap-0.5">
               <span className="text-slate-500 uppercase tracking-wider">{label}</span>
@@ -149,37 +173,46 @@ function DetailPanel({ trade, ltp, onAction }: {
           </div>
 
           <div className="relative h-2 rounded-full bg-slate-700 overflow-visible">
-            {/* Fill */}
             <div
-              className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-500 overflow-hidden ${barColour}`}
+              className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-500 ${barColour}`}
               style={{ width: `${progress}%` }}
             />
-            {/* Entry marker — exactly at 1/3 (1R point) */}
+            {/* Entry marker at exactly 1/3 */}
             <div
               className="absolute top-1/2 -translate-y-1/2 w-0.5 h-4 bg-slate-400 rounded-full z-10"
               style={{ left: `calc(${entryPct}% - 1px)` }}
-              title={`Entry: ${formatINR(trade.entry_price)}`}
             />
           </div>
 
-          {/* Entry label pinned at 1/3 position */}
+          {/* Entry label pinned at 1/3 */}
           <div className="relative h-3 text-xs text-slate-500">
-            <span
-              className="absolute -translate-x-1/2"
-              style={{ left: `${entryPct}%` }}
-            >
+            <span className="absolute -translate-x-1/2" style={{ left: `${entryPct}%` }}>
               Entry
             </span>
           </div>
         </div>
 
-        {/* R:R and Days Held */}
-        <div className="grid grid-cols-2 gap-3 text-xs border-t border-slate-800 pt-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-slate-500 uppercase tracking-wider">R:R</span>
-            <span className="font-semibold text-slate-300">2.0</span>
+        {/* Risk badge + Unrealised PnL */}
+        <div className="flex items-center gap-3 text-xs border-t border-slate-800 pt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 uppercase tracking-wider">Risk</span>
+            <RiskBadge riskPct={riskPct}/>
+            <span className="text-slate-600">({riskPct.toFixed(2)}%)</span>
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className="w-px h-4 bg-slate-700"/>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 uppercase tracking-wider">Unrealised PnL</span>
+            {unrealisedPnl !== null ? (
+              <span className={`font-semibold tabular-nums ${pnlPositive ? "text-emerald-400" : "text-red-400"}`}>
+                <PnlArrow profit={pnlPositive}/>
+                {pnlPositive ? "+" : ""}{formatINR(unrealisedPnl)}
+              </span>
+            ) : (
+              <span className="text-slate-600">—</span>
+            )}
+          </div>
+          <div className="w-px h-4 bg-slate-700"/>
+          <div className="flex items-center gap-2">
             <span className="text-slate-500 uppercase tracking-wider">Days Held</span>
             <span className="font-semibold text-slate-300">
               {daysHeld === 0 ? "Today" : `${daysHeld}d`}
@@ -216,11 +249,11 @@ interface ConfirmState { tradeId: string; action: "delete" | "close" | "stop"; }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }: LedgerProps) {
-  const [loadingId,    setLoadingId]    = useState<string | null>(null);
-  const [confirm,      setConfirm]      = useState<ConfirmState | null>(null);
-  const [expandedId,   setExpandedId]   = useState<string | null>(null);
-  const [pnlMode,      setPnlMode]      = useState<PnlMode>("value");
-  const [refreshing,   setRefreshing]   = useState(false);
+  const [loadingId,  setLoadingId]  = useState<string | null>(null);
+  const [confirm,    setConfirm]    = useState<ConfirmState | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [pnlMode,    setPnlMode]    = useState<PnlMode>("value");
+  const [refreshing, setRefreshing] = useState(false);
 
   function toggleExpand(id: string) {
     setExpandedId(prev => prev === id ? null : id);
@@ -264,7 +297,6 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
   return (
     <div className="flex flex-col gap-4">
 
-      {/* Confirm overlay */}
       {confirm && (
         <div className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3
           flex items-center justify-between gap-4 text-sm">
@@ -345,23 +377,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
               const expanded = expandedId === trade.id;
               const ltp      = livePrices[trade.ticker];
               const value    = ltp !== undefined && trade.status === "OPEN"
-                ? ltp * trade.quantity
-                : null;
-
-              // Key on the Fragment fixes the "unique key" warning
-              return (
-                <tr key={trade.id} className="contents">
-                  {/* trick: use a Fragment with key but render as two real <tr> */}
-                </tr>
-              );
-            })}
-            {trades.map(trade => {
-              const busy     = loadingId === trade.id;
-              const expanded = expandedId === trade.id;
-              const ltp      = livePrices[trade.ticker];
-              const value    = ltp !== undefined && trade.status === "OPEN"
-                ? ltp * trade.quantity
-                : null;
+                ? ltp * trade.quantity : null;
 
               return [
                 <tr
@@ -419,7 +435,10 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
-                      onClick={e => { e.stopPropagation(); setConfirm({ tradeId: trade.id, action: "delete" }); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        setConfirm({ tradeId: trade.id, action: "delete" });
+                      }}
                       title="Delete trade"
                       className="p-1.5 rounded-md text-slate-600 hover:text-red-400
                         hover:bg-red-900/20 transition-colors"
@@ -429,7 +448,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   </td>
                 </tr>,
 
-                expanded && (
+                expanded ? (
                   <tr key={`${trade.id}-detail`} className="bg-slate-800/20">
                     <DetailPanel
                       trade={trade}
@@ -437,7 +456,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                       onAction={action => setConfirm({ tradeId: trade.id, action })}
                     />
                   </tr>
-                ),
+                ) : null,
               ];
             })}
           </tbody>

@@ -5,18 +5,19 @@ import { saveTrade } from "@/lib/db/trades";
 import { CalculationResult } from "@/types";
 
 interface SaveToLedgerButtonProps {
-  userId:       string | null;
-  ticker:       string;
-  result:       CalculationResult;
-  displayedQty:  number;   // exactly what ResultsPanel shows — no recomputing
+  userId:        string | null;
+  ticker:        string;
+  result:        CalculationResult;
+  displayedQty:  number;
   displayedRisk: number;
-  onSaved:      () => void;
+  totalCapital:  number;   // ← new: stored in DB for risk % calculation
+  onSaved:       () => void;
 }
 
 type ToastState = "idle" | "saving" | "success" | "error";
 
 export default function SaveToLedgerButton({
-  userId, ticker, result, displayedQty, displayedRisk, onSaved,
+  userId, ticker, result, displayedQty, displayedRisk, totalCapital, onSaved,
 }: SaveToLedgerButtonProps) {
   const [toast, setToast] = useState<ToastState>("idle");
 
@@ -29,8 +30,9 @@ export default function SaveToLedgerButton({
         ticker,
         entry_price: result.entryPrice,
         stop_loss:   parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
-        quantity:    displayedQty,    // ← exactly what the user saw
-        risk_amount: displayedRisk,   // ← exactly what the user saw
+        quantity:    displayedQty,
+        risk_amount: displayedRisk,
+        capital:     totalCapital,   // ← saved to DB
       });
       setToast("success");
       onSaved();
@@ -74,7 +76,6 @@ export default function SaveToLedgerButton({
           </>
         )}
       </button>
-
       {toast === "success" && (
         <p className="text-xs text-emerald-400 text-center">✓ Trade saved to ledger</p>
       )}

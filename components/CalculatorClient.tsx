@@ -161,6 +161,7 @@ export default function CalculatorClient() {
               result={result}
               displayedQty={displayedQty}
               displayedRisk={displayedRisk}
+              totalCapital={totalCapital}
               onSaved={() => {}}
             />
           </div>
