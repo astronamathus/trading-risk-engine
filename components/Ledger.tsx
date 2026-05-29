@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trade, updateTradeStatus, deleteTrade } from "@/lib/db/trades";
+import { Trade, updateTradeStatus, deleteTrade, closeTrade } from "@/lib/db/trades";
 
 interface LedgerProps {
   trades:        Trade[];
@@ -31,11 +31,10 @@ function StatusBadge({ status }: { status: Trade["status"] }) {
   );
 }
 
-// Risk level badge derived from risk% = risk_amount / capital
 function RiskBadge({ riskPct }: { riskPct: number }) {
   const { label, style } =
     riskPct < 0.5  ? { label: "LOW",    style: "border-emerald-700 text-emerald-400 bg-emerald-900/20" } :
-    riskPct <= 0.75 ? { label: "MEDIUM", style: "border-yellow-600  text-yellow-400  bg-yellow-900/20"  } :
+    riskPct <= 1.5 ? { label: "MEDIUM", style: "border-yellow-600  text-yellow-400  bg-yellow-900/20"  } :
                      { label: "HIGH",   style: "border-red-700     text-red-400     bg-red-900/20"     };
   return (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${style}`}>
@@ -72,10 +71,31 @@ function PnlArrow({ profit }: { profit: boolean }) {
   );
 }
 
+// Handles both unrealised (OPEN) and realised (CLOSED/STOPPED) PnL
 function PnlValue({ trade, ltp, mode, loading }: {
   trade: Trade; ltp: number | undefined; mode: PnlMode; loading: boolean;
 }) {
-  if (trade.status !== "OPEN") return <span className="text-slate-600">—</span>;
+  // Closed/Stopped → show realised PnL stored in DB
+  if (trade.status !== "OPEN") {
+    if (!trade.realised_pnl && trade.realised_pnl !== 0)
+      return <span className="text-slate-600">—</span>;
+    const profit = trade.realised_pnl >= 0;
+    const colour = profit ? "text-emerald-400" : "text-red-400";
+    const pct    = trade.entry_price > 0
+      ? (trade.realised_pnl / (trade.entry_price * trade.quantity)) * 100
+      : 0;
+    const text = mode === "value"
+      ? `${profit ? "+" : ""}${formatINR(trade.realised_pnl)}`
+      : `${profit ? "+" : ""}${pct.toFixed(2)}%`;
+    return (
+      <span className={`${colour} font-medium tabular-nums`}>
+        <PnlArrow profit={profit}/>{text}
+        <span className="text-slate-600 text-xs ml-1">R</span>
+      </span>
+    );
+  }
+
+  // Open → show unrealised PnL from live price
   if (loading && ltp === undefined)
     return <span className="text-slate-600 text-xs animate-pulse">…</span>;
   if (ltp === undefined) return <span className="text-slate-600">—</span>;
@@ -88,7 +108,6 @@ function PnlValue({ trade, ltp, mode, loading }: {
   const text   = mode === "value"
     ? `${profit ? "+" : ""}${formatINR(pnlVal)}`
     : `${profit ? "+" : ""}${pnlPct.toFixed(2)}%`;
-
   return (
     <span className={`${colour} font-medium tabular-nums`}>
       <PnlArrow profit={profit}/>{text}
@@ -101,25 +120,19 @@ function DetailPanel({ trade, ltp, onAction }: {
   trade: Trade; ltp: number | undefined;
   onAction: (action: "close" | "stop") => void;
 }) {
-  const riskPerShare  = trade.entry_price - trade.stop_loss;
-  const target        = trade.entry_price + 2 * riskPerShare;
-  const current       = ltp ?? trade.entry_price;
+  const riskPerShare = trade.entry_price - trade.stop_loss;
+  const target       = trade.entry_price + 2 * riskPerShare;
+  const current      = ltp ?? trade.entry_price;
+  const range        = target - trade.stop_loss;
+  const entryPct     = (riskPerShare / range) * 100; // always 33.33%
+  const raw          = ((current - trade.stop_loss) / range) * 100;
+  const progress     = Math.max(0, Math.min(100, raw));
+  const barColour    = current >= trade.entry_price ? "bg-emerald-500" : "bg-red-500";
 
-  // Progress bar: SL=0%, Entry=33.3%, Target=100%
-  const range         = target - trade.stop_loss;        // 3R
-  const entryPct      = (riskPerShare / range) * 100;    // always 33.33%
-  const raw           = ((current - trade.stop_loss) / range) * 100;
-  const progress      = Math.max(0, Math.min(100, raw));
-  const barColour     = current >= trade.entry_price ? "bg-emerald-500" : "bg-red-500";
-
-  // Progress label
-  const atEntry       = Math.abs(current - trade.entry_price) < 0.01;
-  const aboveEntry    = current > trade.entry_price;
-
-  // Target % = ((LTP - Entry) / (Target - Entry)) * 100
-  const toPctTarget   = ((current - trade.entry_price) / (target - trade.entry_price)) * 100;
-  // SL % = ((Entry - LTP) / (Entry - SL)) * 100
-  const toPctSL       = ((trade.entry_price - current) / riskPerShare) * 100;
+  const atEntry    = Math.abs(current - trade.entry_price) < 0.01;
+  const aboveEntry = current > trade.entry_price;
+  const toPctTarget = ((current - trade.entry_price) / (target - trade.entry_price)) * 100;
+  const toPctSL     = ((trade.entry_price - current) / riskPerShare) * 100;
 
   const progressLabel =
     atEntry    ? "Breakeven" :
@@ -128,33 +141,36 @@ function DetailPanel({ trade, ltp, onAction }: {
 
   const progressColour =
     atEntry    ? "text-slate-400" :
-    aboveEntry ? "text-emerald-400" :
-                 "text-red-400";
+    aboveEntry ? "text-emerald-400" : "text-red-400";
 
-  // Risk badge: risk_amount / capital
   const capital      = trade.capital ?? 100000;
   const riskPct      = trade.risk_amount ? (trade.risk_amount / capital) * 100 : 0;
+  const unrealisedPnl = ltp !== undefined && trade.status === "OPEN"
+    ? (ltp - trade.entry_price) * trade.quantity : null;
+  const pnlPositive  = unrealisedPnl !== null && unrealisedPnl >= 0;
 
-  // Unrealised PnL
-  const unrealisedPnl = ltp !== undefined ? (ltp - trade.entry_price) * trade.quantity : null;
-  const pnlPositive   = unrealisedPnl !== null && unrealisedPnl >= 0;
-
-  // Days held
   const daysHeld = Math.floor(
     (Date.now() - new Date(trade.created_at).getTime()) / (1000 * 60 * 60 * 24)
   );
 
+  // For closed trades, show exit price; for open, show LTP
+  const priceLabel = trade.status === "OPEN" ? "LTP" : "Exit";
+  const priceValue = trade.status === "OPEN"
+    ? (ltp ? formatINR(ltp) : "—")
+    : (trade.exit_price ? formatINR(trade.exit_price) : "—");
+  const priceColour = trade.status === "OPEN" ? "text-blue-300" : "text-amber-300";
+
   return (
-    <td colSpan={8} className="px-4 pb-4 pt-0">
+    <td colSpan={9} className="px-4 pb-4 pt-0">
       <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 flex flex-col gap-4 mt-1">
 
-        {/* Key prices — Entry | SL | Target | LTP | R:R */}
+        {/* Key prices */}
         <div className="grid grid-cols-5 gap-3 text-xs">
           {[
             { label: "Entry",     value: formatINR(trade.entry_price), colour: "text-slate-300"   },
             { label: "Stop Loss", value: formatINR(trade.stop_loss),   colour: "text-red-400"     },
             { label: "Target",    value: formatINR(target),            colour: "text-emerald-400" },
-            { label: "LTP",       value: ltp ? formatINR(ltp) : "—",  colour: "text-blue-300"    },
+            { label: priceLabel,  value: priceValue,                   colour: priceColour        },
             { label: "R:R",       value: "1 : 2",                      colour: "text-slate-300"   },
           ].map(({ label, value, colour }) => (
             <div key={label} className="flex flex-col gap-0.5">
@@ -164,54 +180,67 @@ function DetailPanel({ trade, ltp, onAction }: {
           ))}
         </div>
 
-        {/* Progress bar */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-600">Stop Loss</span>
-            <span className={`font-medium ${progressColour}`}>{progressLabel}</span>
-            <span className="text-slate-600">Target</span>
+        {/* Progress bar — only meaningful for open trades */}
+        {trade.status === "OPEN" && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-600">Stop Loss</span>
+              <span className={`font-medium ${progressColour}`}>{progressLabel}</span>
+              <span className="text-slate-600">Target</span>
+            </div>
+            <div className="relative h-2 rounded-full bg-slate-700 overflow-visible">
+              <div
+                className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-500 ${barColour}`}
+                style={{ width: `${progress}%` }}
+              />
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-0.5 h-4 bg-slate-400 rounded-full z-10"
+                style={{ left: `calc(${entryPct}% - 1px)` }}
+              />
+            </div>
+            <div className="relative h-3 text-xs text-slate-500">
+              <span className="absolute -translate-x-1/2" style={{ left: `${entryPct}%` }}>
+                Entry
+              </span>
+            </div>
           </div>
+        )}
 
-          <div className="relative h-2 rounded-full bg-slate-700 overflow-visible">
-            <div
-              className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-500 ${barColour}`}
-              style={{ width: `${progress}%` }}
-            />
-            {/* Entry marker at exactly 1/3 */}
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-0.5 h-4 bg-slate-400 rounded-full z-10"
-              style={{ left: `calc(${entryPct}% - 1px)` }}
-            />
+        {/* Closed: show realised PnL summary instead of progress bar */}
+        {trade.status !== "OPEN" && trade.realised_pnl !== null && (
+          <div className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3 text-xs">
+            <span className="text-slate-500 uppercase tracking-wider">Realised PnL</span>
+            <div className={`text-lg font-bold mt-0.5 tabular-nums ${
+              trade.realised_pnl >= 0 ? "text-emerald-400" : "text-red-400"
+            }`}>
+              <PnlArrow profit={trade.realised_pnl >= 0}/>
+              {trade.realised_pnl >= 0 ? "+" : ""}{formatINR(trade.realised_pnl)}
+            </div>
           </div>
+        )}
 
-          {/* Entry label pinned at 1/3 */}
-          <div className="relative h-3 text-xs text-slate-500">
-            <span className="absolute -translate-x-1/2" style={{ left: `${entryPct}%` }}>
-              Entry
-            </span>
-          </div>
-        </div>
-
-        {/* Risk badge + Unrealised PnL */}
-        <div className="flex items-center gap-3 text-xs border-t border-slate-800 pt-3">
+        {/* Risk + Unrealised PnL + Days Held */}
+        <div className="flex items-center gap-3 text-xs border-t border-slate-800 pt-3 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-slate-500 uppercase tracking-wider">Risk</span>
             <RiskBadge riskPct={riskPct}/>
             <span className="text-slate-600">({riskPct.toFixed(2)}%)</span>
           </div>
           <div className="w-px h-4 bg-slate-700"/>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500 uppercase tracking-wider">Unrealised PnL</span>
-            {unrealisedPnl !== null ? (
-              <span className={`font-semibold tabular-nums ${pnlPositive ? "text-emerald-400" : "text-red-400"}`}>
-                <PnlArrow profit={pnlPositive}/>
-                {pnlPositive ? "+" : ""}{formatINR(unrealisedPnl)}
-              </span>
-            ) : (
-              <span className="text-slate-600">—</span>
-            )}
-          </div>
-          <div className="w-px h-4 bg-slate-700"/>
+          {trade.status === "OPEN" && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 uppercase tracking-wider">Unrealised PnL</span>
+                {unrealisedPnl !== null ? (
+                  <span className={`font-semibold tabular-nums ${pnlPositive ? "text-emerald-400" : "text-red-400"}`}>
+                    <PnlArrow profit={pnlPositive}/>
+                    {pnlPositive ? "+" : ""}{formatINR(unrealisedPnl)}
+                  </span>
+                ) : <span className="text-slate-600">—</span>}
+              </div>
+              <div className="w-px h-4 bg-slate-700"/>
+            </>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-slate-500 uppercase tracking-wider">Days Held</span>
             <span className="font-semibold text-slate-300">
@@ -220,7 +249,7 @@ function DetailPanel({ trade, ltp, onAction }: {
           </div>
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — open trades only */}
         {trade.status === "OPEN" && (
           <div className="flex gap-2">
             <button
@@ -265,13 +294,32 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
     setTimeout(() => setRefreshing(false), 600);
   }
 
-  async function handleStatus(tradeId: string, status: Trade["status"]) {
+  // Fetches live price then writes exit_price + realised_pnl + status
+  async function handleClose(tradeId: string, status: "CLOSED" | "STOPPED") {
     setConfirm(null);
     setExpandedId(null);
     setLoadingId(tradeId);
-    try { await updateTradeStatus(tradeId, status); onRefresh(); }
-    catch (err) { console.error(err); }
-    finally { setLoadingId(null); }
+
+    const trade = trades.find(t => t.id === tradeId);
+    if (!trade) { setLoadingId(null); return; }
+
+    try {
+      const res       = await fetch(`/api/search-stocks?ticker=${encodeURIComponent(trade.ticker)}`);
+      const data      = await res.json();
+      const exitPrice = data.success
+        ? (data.price as number)
+        : (livePrices[trade.ticker] ?? trade.entry_price); // fallback to cached or entry
+
+      await closeTrade(tradeId, status, exitPrice, trade.quantity, trade.entry_price);
+      onRefresh();
+    } catch (err) {
+      console.error("Close trade error:", err);
+      // Last resort: just update the status without exit price
+      try { await updateTradeStatus(tradeId, status); onRefresh(); }
+      catch (e) { console.error(e); }
+    } finally {
+      setLoadingId(null);
+    }
   }
 
   async function handleDelete(tradeId: string) {
@@ -297,13 +345,14 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
   return (
     <div className="flex flex-col gap-4">
 
+      {/* Confirm overlay */}
       {confirm && (
         <div className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3
           flex items-center justify-between gap-4 text-sm">
           <span className="text-slate-300">
-            {confirm.action === "delete"  ? "Delete this trade permanently?"
-            : confirm.action === "close"  ? "Mark this trade as Closed?"
-            :                              "Mark stop loss as hit?"}
+            {confirm.action === "delete" ? "Delete this trade permanently?"
+            : confirm.action === "close" ? "Close trade at live price?"
+            :                             "Mark stop loss as hit at live price?"}
           </span>
           <div className="flex gap-2 shrink-0">
             <button onClick={() => setConfirm(null)}
@@ -314,8 +363,8 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
             <button
               onClick={() => {
                 if (confirm.action === "delete") handleDelete(confirm.tradeId);
-                else if (confirm.action === "close") handleStatus(confirm.tradeId, "CLOSED");
-                else handleStatus(confirm.tradeId, "STOPPED");
+                else if (confirm.action === "close") handleClose(confirm.tradeId, "CLOSED");
+                else handleClose(confirm.tradeId, "STOPPED");
               }}
               className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                 confirm.action === "delete"
@@ -334,6 +383,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
             <tr className="text-xs uppercase tracking-wider text-slate-500">
               <th className="text-left px-4 py-3">Stock</th>
               <th className="text-right px-4 py-3">Qty</th>
+              <th className="text-right px-4 py-3">Entry</th>
               <th className="text-right px-4 py-3">LTP</th>
               <th className="text-right px-4 py-3">Value</th>
               <th className="text-right px-4 py-3">Risk</th>
@@ -410,6 +460,9 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   <td className="px-4 py-3 text-right text-slate-300 tabular-nums">
                     {trade.quantity.toLocaleString("en-IN")}
                   </td>
+                  <td className="px-4 py-3 text-right text-slate-400 tabular-nums">
+                    {formatINR(trade.entry_price)}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {trade.status !== "OPEN" ? (
                       <span className="text-slate-600">—</span>
@@ -460,6 +513,47 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
               ];
             })}
           </tbody>
+
+          {/* Portfolio value footer */}
+          {(() => {
+            const openTrades   = trades.filter(t => t.status === "OPEN");
+            const totalValue   = openTrades.reduce((sum, t) => {
+              const ltp = livePrices[t.ticker];
+              return sum + (ltp !== undefined ? ltp * t.quantity : t.entry_price * t.quantity);
+            }, 0);
+            const totalRisk    = openTrades.reduce((sum, t) =>
+              sum + (t.risk_amount ?? 0), 0);
+            const totalPnl     = openTrades.reduce((sum, t) => {
+              const ltp = livePrices[t.ticker];
+              return sum + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0);
+            }, 0);
+            const pnlPositive  = totalPnl >= 0;
+
+            return (
+              <tfoot className="border-t border-slate-700 bg-slate-800/60">
+                <tr className="text-xs text-slate-400">
+                  <td className="px-4 py-3 font-medium text-slate-300">
+                    Portfolio
+                    <div className="text-slate-600 font-normal">{openTrades.length} open positions</div>
+                  </td>
+                  <td colSpan={2} className="px-4 py-3" />
+                  <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-200">
+                    {formatINR(totalValue)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-400">
+                    {formatINR(totalRisk)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums font-medium">
+                    <span className={pnlPositive ? "text-emerald-400" : "text-red-400"}>
+                      <PnlArrow profit={pnlPositive}/>
+                      {pnlPositive ? "+" : ""}{formatINR(totalPnl)}
+                    </span>
+                  </td>
+                  <td colSpan={3} className="px-4 py-3" />
+                </tr>
+              </tfoot>
+            );
+          })()}
         </table>
       </div>
     </div>

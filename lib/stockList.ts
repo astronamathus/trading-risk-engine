@@ -9,6 +9,7 @@
 // build script (future feature).
 // ============================================================
 
+
 export interface StockEntry {
   symbol:   string;        // base symbol, e.g. "RELIANCE"
   name:     string;        // display name
@@ -100,8 +101,6 @@ export const STOCK_LIST: StockEntry[] = [
   { symbol: "SAIL",        name: "Steel Authority of India",        exchange: "NSE" },
   { symbol: "SIEMENS",     name: "Siemens India",                   exchange: "NSE" },
   { symbol: "TORNTPHARM", name: "Torrent Pharmaceuticals",          exchange: "NSE" },
-  { symbol: "VEDL",        name: "Vedanta",                         exchange: "NSE" },
-  { symbol: "VOLTAS",      name: "Voltas",                          exchange: "NSE" },
   { symbol: "ZYDUSLIFE",   name: "Zydus Lifesciences",              exchange: "NSE" },
 
   // ── Nifty Midcap 150 (selection) ──────────────────────────

@@ -1,7 +1,6 @@
 // ============================================================
 // lib/db/trades.ts
 // All database operations for trades.
-// Isolated here so components never import supabase directly.
 // ============================================================
 
 import { supabase } from "../supabase";
@@ -15,7 +14,9 @@ export interface Trade {
   target:       number | null;
   quantity:     number;
   risk_amount:  number | null;
-  capital:      number | null;   // ← new: total capital at time of trade
+  capital:      number | null;
+  exit_price:   number | null;  // live price fetched at close
+  realised_pnl: number | null;  // (exit - entry) × qty
   notes:        string | null;
   status:       "OPEN" | "CLOSED" | "STOPPED";
   created_at:   string;
@@ -29,7 +30,7 @@ export interface NewTrade {
   target?:      number;
   quantity:     number;
   risk_amount?: number;
-  capital?:     number;          // ← new
+  capital?:     number;
   notes?:       string;
 }
 
@@ -53,9 +54,32 @@ export async function getTrades(userId: string): Promise<Trade[]> {
   return (data ?? []) as Trade[];
 }
 
+/**
+ * Closes a trade with exit price + realised PnL stored.
+ * Called when user confirms Close or SL Hit — we fetch live
+ * price at that moment and write it alongside the status.
+ */
+export async function closeTrade(
+  tradeId:    string,
+  status:     "CLOSED" | "STOPPED",
+  exitPrice:  number,
+  quantity:   number,
+  entryPrice: number
+): Promise<void> {
+  const realisedPnl = parseFloat(((exitPrice - entryPrice) * quantity).toFixed(2));
+  const { error } = await supabase
+    .from("trades")
+    .update({ status, exit_price: exitPrice, realised_pnl: realisedPnl })
+    .eq("id", tradeId);
+  if (error) throw new Error(`Failed to close trade: ${error.message}`);
+}
+
+/**
+ * Fallback status-only update — used if price fetch fails during close.
+ */
 export async function updateTradeStatus(
   tradeId: string,
-  status: Trade["status"]
+  status:  Trade["status"]
 ): Promise<void> {
   const { error } = await supabase
     .from("trades")

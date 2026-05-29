@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CalculatorInputs } from "@/types";
-import { searchStocks } from "@/lib/stockList";
+import { searchStocks } from "@/lib/stockList"; // ← lowercase, no StockEntry import needed
 
 interface Suggestion {
   symbol:   string;
@@ -190,7 +190,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
               border-slate-600 bg-slate-900 shadow-xl overflow-hidden">
               {suggestions.map((s, i) => (
                 <li
-                  key={s.symbol}
+                  key={`${s.symbol}-${s.exchange}-${i}`}
                   onMouseDown={() => handleSelect(s)}
                   className={`flex items-center justify-between px-3 py-2.5 cursor-pointer
                     transition-colors text-sm ${
