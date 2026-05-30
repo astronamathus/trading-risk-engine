@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CalculatorInputs } from "@/types";
-import { searchStocks } from "@/lib/stockList"; // ← lowercase, no StockEntry import needed
+import { searchStocks } from "@/lib/stockList"; 
 
 interface Suggestion {
   symbol:   string;
