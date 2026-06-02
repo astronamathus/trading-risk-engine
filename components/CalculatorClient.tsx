@@ -14,6 +14,7 @@ import { validateInputs, calculatePosition, validateStopLoss } from "@/lib/calcu
 import { CalculatorInputs, CalculationResult, AppStatus } from "@/types";
 import { getAnonymousId, ensureUser } from "@/lib/user";
 
+//Main client component
 export default function CalculatorClient() {
   const [status,           setStatus]           = useState<AppStatus>("idle");
   const [error,            setError]            = useState<string | null>(null);
@@ -55,7 +56,7 @@ export default function CalculatorClient() {
       setStatus("error");
       return;
     }
-    //Loading status
+    //Loadi status
     setStatus("loading");
 
     try {
