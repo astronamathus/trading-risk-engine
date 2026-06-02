@@ -3,60 +3,28 @@
 // Single source of truth for all TypeScript interfaces.
 // If more than one file uses a type, it lives here.
 // ============================================================
+// ============================================================
+// types/index.ts
+// ============================================================
 
-/**
- * What the user types into the calculator form.
- * Used by: CalculatorForm, CalculatorClient, calculations.ts
- */
 export interface CalculatorInputs {
-  ticker:      string;   // e.g. "RELIANCE.NS"
-  stopLoss:    number;   // price at which you exit if wrong
-  capital:     number;   // total trading capital (₹)
-  riskPercent: number;   // % of capital willing to lose per trade
+  ticker:      string;
+  stopLoss:    number;
+  capital:     number;
+  riskPercent: number;
+  entryPrice:  number;  // user-set entry, may differ from live LTP
 }
 
-/**
- * The full result returned by calculatePosition().
- * Used by: CalculatorClient, ResultsPanel, ResultCard
- */
 export interface CalculationResult {
-  entryPrice:      number;  // live price fetched from API
-  riskPerShare:    number;  // entryPrice − stopLoss
-  maxRiskAmount:   number;  // capital × (riskPercent / 100)
-  positionSize:    number;  // floor(maxRiskAmount / riskPerShare)
-  capitalRequired: number;  // positionSize × entryPrice
+  entryPrice:      number;
+  riskPerShare:    number;
+  maxRiskAmount:   number;
+  positionSize:    number;
+  capitalRequired: number;
 }
 
-/**
- * Response shape from GET /api/stock-price.
- * Discriminated union: either success with price, or failure with error.
- * Used by: app/api/stock-price/route.ts, CalculatorClient
- */
 export type StockPriceResponse =
   | { success: true;  ticker: string; price: number }
   | { success: false; error: string };
 
-/**
- * UI state machine for the calculator page.
- * Used by: CalculatorClient
- */
 export type AppStatus = "idle" | "loading" | "success" | "error";
-
-/**
- * A single validation error with an optional field reference.
- * Used by: calculations.ts (validateInputs), CalculatorForm
- */
-export interface ValidationError {
-  message: string;
-  field?: keyof CalculatorInputs;  // which field caused the error
-}
-
-/**
- * Shape of errors returned from API routes.
- * Used by: all API routes, CalculatorClient fetch handler
- */
-export interface ApiError {
-  success: false;
-  error:   string;
-  code?:   number;   // optional HTTP status code
-}

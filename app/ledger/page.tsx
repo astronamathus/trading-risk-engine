@@ -1,31 +1,127 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Ledger from "@/components/Ledger";
 import { getAnonymousId, ensureUser } from "@/lib/user";
-import { getTrades } from "@/lib/db/trades";
+import { getTrades, activateTrade, closeTrade } from "@/lib/db/trades";
 import type { Trade } from "@/lib/db/trades";
 
+const POLL_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+
 export default function LedgerPage() {
-  const [userId,    setUserId]    = useState<string | null>(null);
-  const [trades,    setTrades]    = useState<Trade[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState<string | null>(null);
+  const [userId,        setUserId]        = useState<string | null>(null);
+  const [trades,        setTrades]        = useState<Trade[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState<string | null>(null);
+  const [livePrices,    setLivePrices]    = useState<Record<string, number>>({});
+  const [pricesLoading, setPricesLoading] = useState(false);
+  const [lastChecked,   setLastChecked]   = useState<Date | null>(null);
 
-  // Map of ticker → live price, fetched for all OPEN trades on load
-  const [livePrices,      setLivePrices]      = useState<Record<string, number>>({});
-  const [pricesLoading,   setPricesLoading]   = useState(false);
+  const userIdRef = useRef<string | null>(null);
+  const tradesRef = useRef<Trade[]>([]);
 
+  // Keep refs in sync so the interval closure sees fresh data
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
+  useEffect(() => { tradesRef.current = trades; }, [trades]);
+
+  // ── Fetch live prices ─────────────────────────────────────
+  async function fetchLivePrices(allTrades: Trade[]): Promise<Record<string, number>> {
+    const monitoredTrades = allTrades.filter(
+      t => t.status === "OPEN" || t.status === "QUEUED"
+    );
+    const uniqueTickers = [...new Set(monitoredTrades.map(t => t.ticker))];
+    if (uniqueTickers.length === 0) return {};
+
+    const results = await Promise.allSettled(
+      uniqueTickers.map(async ticker => {
+        const res  = await fetch(`/api/search-stocks?ticker=${encodeURIComponent(ticker)}`);
+        const data = await res.json();
+        return { ticker, price: data.success ? (data.price as number) : null };
+      })
+    );
+
+    const priceMap: Record<string, number> = {};
+    results.forEach(r => {
+      if (r.status === "fulfilled" && r.value.price !== null)
+        priceMap[r.value.ticker] = r.value.price;
+    });
+    return priceMap;
+  }
+
+  // ── Auto-monitor: check QUEUED → OPEN and OPEN → STOPPED ──
+  const runMonitor = useCallback(async (
+    currentTrades: Trade[],
+    prices: Record<string, number>
+  ) => {
+    const actionPromises: Promise<void>[] = [];
+
+    for (const trade of currentTrades) {
+      const ltp = prices[trade.ticker];
+      if (ltp === undefined) continue;
+
+      if (trade.status === "QUEUED" && trade.entry_target !== null) {
+        // Activate when LTP reaches or drops to entry target
+        if (ltp <= trade.entry_target) {
+          console.log(`[monitor] Activating ${trade.ticker} — LTP ${ltp} ≤ entry ${trade.entry_target}`);
+          actionPromises.push(activateTrade(trade.id));
+        }
+      }
+
+      if (trade.status === "OPEN") {
+        // Stop out when LTP hits or drops below stop loss
+        if (ltp <= trade.stop_loss) {
+          console.log(`[monitor] Stopping ${trade.ticker} — LTP ${ltp} ≤ SL ${trade.stop_loss}`);
+          actionPromises.push(
+            closeTrade(trade.id, "STOPPED", ltp, trade.quantity, trade.entry_price)
+          );
+        }
+      }
+    }
+
+    if (actionPromises.length > 0) {
+      await Promise.allSettled(actionPromises);
+      return true; // signals that trades changed, needs refresh
+    }
+    return false;
+  }, []);
+
+  // ── Full refresh: fetch trades + prices + run monitor ─────
+  const refresh = useCallback(async (uid?: string) => {
+    const id = uid ?? userIdRef.current;
+    if (!id) return;
+
+    try {
+      const data = await getTrades(id);
+      setTrades(data);
+      tradesRef.current = data;
+
+      setPricesLoading(true);
+      const prices = await fetchLivePrices(data);
+      setLivePrices(prices);
+      setLastChecked(new Date());
+
+      const changed = await runMonitor(data, prices);
+      if (changed) {
+        // Re-fetch trades so UI reflects activations/stops
+        const updated = await getTrades(id);
+        setTrades(updated);
+      }
+    } catch (err) {
+      console.error("Refresh error:", err);
+    } finally {
+      setPricesLoading(false);
+    }
+  }, [runMonitor]);
+
+  // ── Bootstrap on mount ────────────────────────────────────
   useEffect(() => {
     async function bootstrap() {
       try {
         const anonymousId = getAnonymousId();
         const uid         = await ensureUser(anonymousId);
         setUserId(uid);
-        const data = await getTrades(uid);
-        setTrades(data);
-        // Fetch live prices for open trades after loading
-        await fetchLivePrices(data);
+        userIdRef.current = uid;
+        await refresh(uid);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load ledger.");
       } finally {
@@ -33,53 +129,19 @@ export default function LedgerPage() {
       }
     }
     bootstrap();
-  }, []);
+  }, [refresh]);
 
-  /**
-   * Fetches live prices for all OPEN trades in parallel.
-   * Deduplicates tickers so we don't double-fetch the same stock.
-   */
-  async function fetchLivePrices(allTrades: Trade[]) {
-    const openTrades  = allTrades.filter(t => t.status === "OPEN");
-    const uniqueTickers = [...new Set(openTrades.map(t => t.ticker))];
-    if (uniqueTickers.length === 0) return;
-
-    setPricesLoading(true);
-    try {
-      const results = await Promise.allSettled(
-        uniqueTickers.map(async ticker => {
-          const res  = await fetch(`/api/search-stocks?ticker=${encodeURIComponent(ticker)}`);
-          const data = await res.json();
-          return { ticker, price: data.success ? (data.price as number) : null };
-        })
-      );
-
-      const priceMap: Record<string, number> = {};
-      results.forEach(r => {
-        if (r.status === "fulfilled" && r.value.price !== null) {
-          priceMap[r.value.ticker] = r.value.price;
-        }
-      });
-      setLivePrices(priceMap);
-    } catch (err) {
-      console.error("Failed to fetch live prices:", err);
-    } finally {
-      setPricesLoading(false);
-    }
-  }
-
-  async function refresh() {
-    if (!userId) return;
-    try {
-      const data = await getTrades(userId);
-      setTrades(data);
-      await fetchLivePrices(data);
-    } catch (err) {
-      console.error(err);
-    }
-  }
+  // ── 15-minute polling loop ────────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log("[monitor] 15-min poll triggered");
+      refresh();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   const open    = trades.filter(t => t.status === "OPEN").length;
+  const queued  = trades.filter(t => t.status === "QUEUED").length;
   const closed  = trades.filter(t => t.status === "CLOSED").length;
   const stopped = trades.filter(t => t.status === "STOPPED").length;
 
@@ -90,22 +152,32 @@ export default function LedgerPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-white">Trade Ledger</h1>
           <p className="text-sm text-slate-400">
-            Your saved positions — persistent across sessions, no sign-in required.
+            Prices refresh every 15 minutes automatically while this page is open.
           </p>
         </div>
 
-        {trades.length > 0 && (
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex gap-2 flex-wrap">
-              <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
-                text-emerald-400 bg-emerald-900/20">{open} Open</span>
-              <span className="text-xs px-3 py-1 rounded-full border border-slate-600
-                text-slate-400 bg-slate-800">{closed} Closed</span>
-              <span className="text-xs px-3 py-1 rounded-full border border-red-800
-                text-red-400 bg-red-900/20">{stopped} SL Hit</span>
-            </div>
+        {/* Status chips + last checked */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
+              text-emerald-400 bg-emerald-900/20">{open} Open</span>
+            {queued > 0 && (
+              <span className="text-xs px-3 py-1 rounded-full border border-amber-700
+                text-amber-400 bg-amber-900/20">{queued} Queued</span>
+            )}
+            <span className="text-xs px-3 py-1 rounded-full border border-slate-600
+              text-slate-400 bg-slate-800">{closed} Closed</span>
+            <span className="text-xs px-3 py-1 rounded-full border border-red-800
+              text-red-400 bg-red-900/20">{stopped} SL Hit</span>
           </div>
-        )}
+          {lastChecked && (
+            <span className="text-xs text-slate-600">
+              Last checked {lastChecked.toLocaleTimeString("en-IN", {
+                hour: "2-digit", minute: "2-digit", second: "2-digit",
+              })}
+            </span>
+          )}
+        </div>
 
         <section className="rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur p-6 shadow-xl">
           {loading ? (
@@ -125,7 +197,7 @@ export default function LedgerPage() {
               trades={trades}
               livePrices={livePrices}
               pricesLoading={pricesLoading}
-              onRefresh={refresh}
+              onRefresh={() => refresh()}
             />
           )}
         </section>

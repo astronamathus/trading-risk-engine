@@ -20,6 +20,7 @@ function formatINR(v: number) {
 
 function StatusBadge({ status }: { status: Trade["status"] }) {
   const styles = {
+    QUEUED:  "border-amber-700  text-amber-400  bg-amber-900/20",
     OPEN:    "border-emerald-700 text-emerald-400 bg-emerald-900/20",
     CLOSED:  "border-slate-600  text-slate-400  bg-slate-800/40",
     STOPPED: "border-red-800    text-red-400    bg-red-900/20",

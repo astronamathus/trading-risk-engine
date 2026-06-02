@@ -6,32 +6,35 @@
 import { supabase } from "../supabase";
 
 export interface Trade {
-  id:           string;
-  user_id:      string;
-  ticker:       string;
-  entry_price:  number;
-  stop_loss:    number;
-  target:       number | null;
-  quantity:     number;
-  risk_amount:  number | null;
-  capital:      number | null;
-  exit_price:   number | null;  // live price fetched at close
-  realised_pnl: number | null;  // (exit - entry) × qty
-  notes:        string | null;
-  status:       "OPEN" | "CLOSED" | "STOPPED";
-  created_at:   string;
+  id:            string;
+  user_id:       string;
+  ticker:        string;
+  entry_price:   number;        // user's intended entry
+  entry_target:  number | null; // if set, trade is QUEUED until LTP hits this
+  stop_loss:     number;
+  target:        number | null;
+  quantity:      number;
+  risk_amount:   number | null;
+  capital:       number | null;
+  exit_price:    number | null;
+  realised_pnl:  number | null;
+  notes:         string | null;
+  status:        "QUEUED" | "OPEN" | "CLOSED" | "STOPPED";
+  created_at:    string;
 }
 
 export interface NewTrade {
-  user_id:      string;
-  ticker:       string;
-  entry_price:  number;
-  stop_loss:    number;
-  target?:      number;
-  quantity:     number;
-  risk_amount?: number;
-  capital?:     number;
-  notes?:       string;
+  user_id:       string;
+  ticker:        string;
+  entry_price:   number;
+  entry_target?: number;
+  stop_loss:     number;
+  target?:       number;
+  quantity:      number;
+  risk_amount?:  number;
+  capital?:      number;
+  notes?:        string;
+  status?:       "QUEUED" | "OPEN";
 }
 
 export async function saveTrade(trade: NewTrade): Promise<Trade> {
@@ -54,11 +57,6 @@ export async function getTrades(userId: string): Promise<Trade[]> {
   return (data ?? []) as Trade[];
 }
 
-/**
- * Closes a trade with exit price + realised PnL stored.
- * Called when user confirms Close or SL Hit — we fetch live
- * price at that moment and write it alongside the status.
- */
 export async function closeTrade(
   tradeId:    string,
   status:     "CLOSED" | "STOPPED",
@@ -74,9 +72,14 @@ export async function closeTrade(
   if (error) throw new Error(`Failed to close trade: ${error.message}`);
 }
 
-/**
- * Fallback status-only update — used if price fetch fails during close.
- */
+export async function activateTrade(tradeId: string): Promise<void> {
+  const { error } = await supabase
+    .from("trades")
+    .update({ status: "OPEN" })
+    .eq("id", tradeId);
+  if (error) throw new Error(`Failed to activate trade: ${error.message}`);
+}
+
 export async function updateTradeStatus(
   tradeId: string,
   status:  Trade["status"]

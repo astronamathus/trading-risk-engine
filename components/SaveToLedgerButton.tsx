@@ -10,14 +10,16 @@ interface SaveToLedgerButtonProps {
   result:        CalculationResult;
   displayedQty:  number;
   displayedRisk: number;
-  totalCapital:  number;   // ← new: stored in DB for risk % calculation
+  totalCapital:  number;
+  isQueued:      boolean;   // true when entry > live LTP
   onSaved:       () => void;
 }
 
 type ToastState = "idle" | "saving" | "success" | "error";
 
 export default function SaveToLedgerButton({
-  userId, ticker, result, displayedQty, displayedRisk, totalCapital, onSaved,
+  userId, ticker, result, displayedQty, displayedRisk,
+  totalCapital, isQueued, onSaved,
 }: SaveToLedgerButtonProps) {
   const [toast, setToast] = useState<ToastState>("idle");
 
@@ -26,14 +28,18 @@ export default function SaveToLedgerButton({
     setToast("saving");
     try {
       await saveTrade({
-        user_id:     userId,
+        user_id:      userId,
         ticker,
-        entry_price: result.entryPrice,
-        stop_loss:   parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
-        quantity:    displayedQty,
-        risk_amount: displayedRisk,
-        capital:     totalCapital,   // ← saved to DB
-      });
+        entry_price:  result.entryPrice,
+        // entry_target set when queued — this is the price that activates the trade
+        entry_target: isQueued ? result.entryPrice : undefined,
+        stop_loss:    parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
+        quantity:     displayedQty,
+        risk_amount:  displayedRisk,
+        capital:      totalCapital,
+        status:       isQueued ? "QUEUED" : "OPEN",
+      } as Parameters<typeof saveTrade>[0]);
+
       setToast("success");
       onSaved();
       setTimeout(() => setToast("idle"), 3000);
@@ -69,15 +75,22 @@ export default function SaveToLedgerButton({
         ) : (
           <>
             <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">
-              <path d="M8 2v8M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M8 2v8M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
-            Add to Ledger
+            {isQueued ? "Queue Trade" : "Add to Ledger"}
           </>
         )}
       </button>
+
       {toast === "success" && (
-        <p className="text-xs text-emerald-400 text-center">✓ Trade saved to ledger</p>
+        <p className="text-xs text-center">
+          {isQueued
+            ? <span className="text-amber-400">🕐 Trade queued — activates when price hits ₹{result.entryPrice.toLocaleString("en-IN")}</span>
+            : <span className="text-emerald-400">✓ Trade saved to ledger</span>
+          }
+        </p>
       )}
       {toast === "error" && (
         <p className="text-xs text-red-400 text-center">✗ Failed to save — try again</p>

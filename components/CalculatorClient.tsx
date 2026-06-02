@@ -9,7 +9,6 @@ import { CalculatorInputs, CalculationResult, AppStatus } from "@/types";
 import { getAnonymousId, ensureUser } from "@/lib/user";
 
 export default function CalculatorClient() {
-  // ── Calculator state ──────────────────────────────────────
   const [status,           setStatus]           = useState<AppStatus>("idle");
   const [error,            setError]            = useState<string | null>(null);
   const [result,           setResult]           = useState<CalculationResult | null>(null);
@@ -17,16 +16,15 @@ export default function CalculatorClient() {
   const [totalCapital,     setTotalCapital]     = useState<number>(0);
   const [fetchedAt,        setFetchedAt]        = useState<Date | null>(null);
   const [exchange,         setExchange]         = useState<"NSE" | "BSE">("NSE");
+  const [displayedQty,     setDisplayedQty]     = useState<number>(0);
+  const [displayedRisk,    setDisplayedRisk]    = useState<number>(0);
 
-  // Tracks exactly what ResultsPanel is currently displaying
-  // so SaveToLedgerButton saves what the user sees, not a recomputed value
-  const [displayedQty,  setDisplayedQty]  = useState<number>(0);
-  const [displayedRisk, setDisplayedRisk] = useState<number>(0);
+  // Track whether this is a queued trade (entry > LTP)
+  const [isQueued,         setIsQueued]         = useState(false);
+  const [livePriceAtCalc,  setLivePriceAtCalc]  = useState<number>(0);
 
-  // ── User state (for Save to Ledger) ──────────────────────
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Bootstrap: get/create anonymous user on mount
   useEffect(() => {
     async function bootstrap() {
       try {
@@ -34,15 +32,13 @@ export default function CalculatorClient() {
         const uid         = await ensureUser(anonymousId);
         setUserId(uid);
       } catch (err) {
-        // Non-fatal — calculator works without DB, save button stays disabled
         console.error("User bootstrap error:", err);
       }
     }
     bootstrap();
   }, []);
 
-  // ── Calculator ────────────────────────────────────────────
-  async function handleCalculate(inputs: CalculatorInputs) {
+  async function handleCalculate(inputs: CalculatorInputs & { entryPrice: number }) {
     setError(null);
     setResult(null);
 
@@ -56,36 +52,42 @@ export default function CalculatorClient() {
     setStatus("loading");
 
     try {
+      // Always fetch live price for validation + queued detection
       const res = await fetch(
         `/api/search-stocks?ticker=${encodeURIComponent(inputs.ticker)}`
       );
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
         const body = await res.text();
-        throw new Error(
-          `API returned non-JSON (HTTP ${res.status}). Starts with: ${body.slice(0, 80)}`
-        );
+        throw new Error(`API returned non-JSON (HTTP ${res.status}). Starts: ${body.slice(0, 80)}`);
       }
 
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Failed to fetch price.");
 
-      // Validate stop loss against live price + risk budget before calculating
+      const livePrice   = data.price as number;
+      const entryPrice  = inputs.entryPrice; // user's intended entry
+      const queued      = entryPrice > livePrice;
+
+      // Validate stop loss against the user's entry price (not necessarily live)
       const slError = validateStopLoss(
         inputs.stopLoss,
-        data.price,
+        entryPrice,
         inputs.capital,
         inputs.riskPercent
       );
       if (slError) throw new Error(slError);
 
-      const calculationResult = calculatePosition(inputs, data.price);
+      // Calculate using user's entry price
+      const calculationResult = calculatePosition(inputs, entryPrice);
 
       setResult(calculationResult);
       setSubmittedTicker(data.ticker);
       setTotalCapital(inputs.capital);
       setFetchedAt(new Date());
       setExchange(data.ticker?.endsWith(".BO") ? "BSE" : "NSE");
+      setIsQueued(queued);
+      setLivePriceAtCalc(livePrice);
       setStatus("success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -98,9 +100,6 @@ export default function CalculatorClient() {
 
       {/* Left: Input card */}
       <section className="rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur p-6 shadow-xl">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">
-          Trade Parameters
-        </h2>
         <CalculatorForm
           onSubmit={handleCalculate}
           isLoading={status === "loading"}
@@ -117,9 +116,7 @@ export default function CalculatorClient() {
               <span className="mt-0.5">⚠</span>
               <span>{error}</span>
             </div>
-            <p className="text-xs text-slate-500 text-center">
-              Edit the form and try again.
-            </p>
+            <p className="text-xs text-slate-500 text-center">Edit the form and try again.</p>
           </div>
         )}
 
@@ -144,6 +141,18 @@ export default function CalculatorClient() {
 
         {status === "success" && result && (
           <div className="flex flex-col gap-4">
+            {/* Queued banner */}
+            {isQueued && (
+              <div className="rounded-xl border border-amber-700 bg-amber-900/20 px-4 py-3
+                text-sm text-amber-300 flex gap-2 items-start">
+                <span className="mt-0.5">🕐</span>
+                <span>
+                  Entry ₹{result.entryPrice.toLocaleString("en-IN")} is above LTP ₹{livePriceAtCalc.toLocaleString("en-IN")}.
+                  This trade will be <strong>queued</strong> and activate automatically when price is reached.
+                </span>
+              </div>
+            )}
+
             <ResultsPanel
               result={result}
               ticker={submittedTicker}
@@ -162,6 +171,7 @@ export default function CalculatorClient() {
               displayedQty={displayedQty}
               displayedRisk={displayedRisk}
               totalCapital={totalCapital}
+              isQueued={isQueued}
               onSaved={() => {}}
             />
           </div>
