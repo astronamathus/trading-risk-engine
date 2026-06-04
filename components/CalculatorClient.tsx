@@ -31,7 +31,7 @@ export default function CalculatorClient() {
   const [livePriceAtCalc,  setLivePriceAtCalc]  = useState<number>(0);
 
   const [userId, setUserId] = useState<string | null>(null);
-
+//Assign unique ID for each new session
   useEffect(() => {
     async function bootstrap() {
       try {
