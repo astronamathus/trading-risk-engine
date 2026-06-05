@@ -1,3 +1,9 @@
+// ============================================================
+// components/CalculatorClient.tsx
+// Client component for the trading calculator
+// ============================================================
+
+
 "use client";
 
 import { useState, useEffect } from "react";
