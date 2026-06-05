@@ -48,6 +48,7 @@ export default function CalculatorClient() {
     setError(null);
     setResult(null);
 
+//Validate errors
     const validationError = validateInputs(inputs);
     if (validationError) {
       setError(validationError);
