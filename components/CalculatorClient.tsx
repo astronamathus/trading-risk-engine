@@ -3,7 +3,6 @@
 // Client component for the trading calculator
 // ============================================================
 
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -14,7 +13,6 @@ import { validateInputs, calculatePosition, validateStopLoss } from "@/lib/calcu
 import { CalculatorInputs, CalculationResult, AppStatus } from "@/types";
 import { getAnonymousId, ensureUser } from "@/lib/user";
 
-//Main client component
 export default function CalculatorClient() {
   const [status,           setStatus]           = useState<AppStatus>("idle");
   const [error,            setError]            = useState<string | null>(null);
@@ -31,7 +29,7 @@ export default function CalculatorClient() {
   const [livePriceAtCalc,  setLivePriceAtCalc]  = useState<number>(0);
 
   const [userId, setUserId] = useState<string | null>(null);
-//Assign unique ID for each new session
+
   useEffect(() => {
     async function bootstrap() {
       try {
@@ -49,14 +47,13 @@ export default function CalculatorClient() {
     setError(null);
     setResult(null);
 
-//Validate errors
     const validationError = validateInputs(inputs);
     if (validationError) {
       setError(validationError);
       setStatus("error");
       return;
     }
-    //Loading status
+
     setStatus("loading");
 
     try {
@@ -153,7 +150,11 @@ export default function CalculatorClient() {
             {isQueued && (
               <div className="rounded-xl border border-amber-700 bg-amber-900/20 px-4 py-3
                 text-sm text-amber-300 flex gap-2 items-start">
-                <span className="mt-0.5">🕐</span>
+                <svg className="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 16 16" fill="none"
+                  stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="8" cy="8" r="6.5"/>
+                  <path d="M8 4.5V8l2.5 2"/>
+                </svg>
                 <span>
                   Entry ₹{result.entryPrice.toLocaleString("en-IN")} is above LTP ₹{livePriceAtCalc.toLocaleString("en-IN")}.
                   This trade will be <strong>queued</strong> and activate automatically when price is reached.

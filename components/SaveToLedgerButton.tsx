@@ -86,10 +86,18 @@ export default function SaveToLedgerButton({
 
       {toast === "success" && (
         <p className="text-xs text-center">
-          {isQueued
-            ? <span className="text-amber-400">🕐 Trade queued — activates when price hits ₹{result.entryPrice.toLocaleString("en-IN")}</span>
-            : <span className="text-emerald-400">✓ Trade saved to ledger</span>
-          }
+          {isQueued ? (
+            <span className="text-amber-400 flex items-center justify-center gap-1">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="8" r="6.5"/>
+                <path d="M8 4.5V8l2.5 2"/>
+              </svg>
+              Trade queued — activates when price hits ₹{result.entryPrice.toLocaleString("en-IN")}
+            </span>
+          ) : (
+            <span className="text-emerald-400">✓ Trade saved to ledger</span>
+          )}
         </p>
       )}
       {toast === "error" && (

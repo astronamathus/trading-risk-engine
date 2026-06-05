@@ -8,6 +8,17 @@ import type { Trade } from "@/lib/db/trades";
 
 const POLL_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
+// Inline clock SVG — no emoji
+function ClockIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="6.5"/>
+      <path d="M8 4.5V8l2.5 2"/>
+    </svg>
+  );
+}
+
 export default function LedgerPage() {
   const [userId,        setUserId]        = useState<string | null>(null);
   const [trades,        setTrades]        = useState<Trade[]>([]);
@@ -20,16 +31,13 @@ export default function LedgerPage() {
   const userIdRef = useRef<string | null>(null);
   const tradesRef = useRef<Trade[]>([]);
 
-  // Keep refs in sync so the interval closure sees fresh data
-  useEffect(() => { userIdRef.current = userId; }, [userId]);
+  useEffect(() => { userIdRef.current = userId; },  [userId]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
 
-  // ── Fetch live prices ─────────────────────────────────────
+  // ── Fetch live prices for OPEN + QUEUED trades ────────────
   async function fetchLivePrices(allTrades: Trade[]): Promise<Record<string, number>> {
-    const monitoredTrades = allTrades.filter(
-      t => t.status === "OPEN" || t.status === "QUEUED"
-    );
-    const uniqueTickers = [...new Set(monitoredTrades.map(t => t.ticker))];
+    const monitored     = allTrades.filter(t => t.status === "OPEN" || t.status === "QUEUED");
+    const uniqueTickers = [...new Set(monitored.map(t => t.ticker))];
     if (uniqueTickers.length === 0) return {};
 
     const results = await Promise.allSettled(
@@ -48,44 +56,47 @@ export default function LedgerPage() {
     return priceMap;
   }
 
-  // ── Auto-monitor: check QUEUED → OPEN and OPEN → STOPPED ──
+  // ── Monitor logic ─────────────────────────────────────────
+  // QUEUED → OPEN : price rises TO or ABOVE entry_target
+  //   (we only queue when entry > LTP, so we always wait for price to go UP)
+  // OPEN → STOPPED : price falls TO or BELOW stop_loss
   const runMonitor = useCallback(async (
     currentTrades: Trade[],
     prices: Record<string, number>
-  ) => {
-    const actionPromises: Promise<void>[] = [];
+  ): Promise<boolean> => {
+    const actions: Promise<void>[] = [];
 
     for (const trade of currentTrades) {
       const ltp = prices[trade.ticker];
       if (ltp === undefined) continue;
 
       if (trade.status === "QUEUED" && trade.entry_target !== null) {
-        // Activate when LTP reaches or drops to entry target
-        if (ltp <= trade.entry_target) {
-          console.log(`[monitor] Activating ${trade.ticker} — LTP ${ltp} ≤ entry ${trade.entry_target}`);
-          actionPromises.push(activateTrade(trade.id));
+        // Activate only when LTP rises UP to meet the entry target
+        if (ltp >= trade.entry_target) {
+          console.log(`[monitor] Activating ${trade.ticker} — LTP ${ltp} ≥ entry target ${trade.entry_target}`);
+          actions.push(activateTrade(trade.id));
         }
       }
 
       if (trade.status === "OPEN") {
-        // Stop out when LTP hits or drops below stop loss
+        // Stop out when LTP hits or falls below stop loss
         if (ltp <= trade.stop_loss) {
           console.log(`[monitor] Stopping ${trade.ticker} — LTP ${ltp} ≤ SL ${trade.stop_loss}`);
-          actionPromises.push(
+          actions.push(
             closeTrade(trade.id, "STOPPED", ltp, trade.quantity, trade.entry_price)
           );
         }
       }
     }
 
-    if (actionPromises.length > 0) {
-      await Promise.allSettled(actionPromises);
-      return true; // signals that trades changed, needs refresh
+    if (actions.length > 0) {
+      await Promise.allSettled(actions);
+      return true;
     }
     return false;
   }, []);
 
-  // ── Full refresh: fetch trades + prices + run monitor ─────
+  // ── Full refresh ──────────────────────────────────────────
   const refresh = useCallback(async (uid?: string) => {
     const id = uid ?? userIdRef.current;
     if (!id) return;
@@ -102,7 +113,6 @@ export default function LedgerPage() {
 
       const changed = await runMonitor(data, prices);
       if (changed) {
-        // Re-fetch trades so UI reflects activations/stops
         const updated = await getTrades(id);
         setTrades(updated);
       }
@@ -113,7 +123,7 @@ export default function LedgerPage() {
     }
   }, [runMonitor]);
 
-  // ── Bootstrap on mount ────────────────────────────────────
+  // ── Bootstrap ─────────────────────────────────────────────
   useEffect(() => {
     async function bootstrap() {
       try {
@@ -131,7 +141,7 @@ export default function LedgerPage() {
     bootstrap();
   }, [refresh]);
 
-  // ── 15-minute polling loop ────────────────────────────────
+  // ── 15-min polling ────────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
       console.log("[monitor] 15-min poll triggered");
@@ -163,7 +173,10 @@ export default function LedgerPage() {
               text-emerald-400 bg-emerald-900/20">{open} Open</span>
             {queued > 0 && (
               <span className="text-xs px-3 py-1 rounded-full border border-amber-700
-                text-amber-400 bg-amber-900/20">{queued} Queued</span>
+                text-amber-400 bg-amber-900/20 flex items-center gap-1">
+                <ClockIcon className="w-3 h-3"/>
+                {queued} Queued
+              </span>
             )}
             <span className="text-xs px-3 py-1 rounded-full border border-slate-600
               text-slate-400 bg-slate-800">{closed} Closed</span>
@@ -171,7 +184,8 @@ export default function LedgerPage() {
               text-red-400 bg-red-900/20">{stopped} SL Hit</span>
           </div>
           {lastChecked && (
-            <span className="text-xs text-slate-600">
+            <span className="text-xs text-slate-600 flex items-center gap-1">
+              <ClockIcon className="w-3 h-3"/>
               Last checked {lastChecked.toLocaleTimeString("en-IN", {
                 hour: "2-digit", minute: "2-digit", second: "2-digit",
               })}
