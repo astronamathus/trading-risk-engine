@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { Trade } from "@/lib/db/trades";
 
 interface HoldingsPieChartProps {
@@ -9,9 +9,16 @@ interface HoldingsPieChartProps {
   livePrices: Record<string, number>;
 }
 
-const COLOURS = [
-  "#10b981", "#60a5fa", "#f59e0b", "#f472b6",
-  "#a78bfa", "#34d399", "#fb923c", "#38bdf8",
+// Semi-transparent colours matching our badge palette
+const SLICE_COLOURS = [
+  { fill: "rgba(16,185,129,0.15)",  stroke: "#10b981" }, // emerald
+  { fill: "rgba(96,165,250,0.15)",  stroke: "#60a5fa" }, // blue
+  { fill: "rgba(245,158,11,0.15)",  stroke: "#f59e0b" }, // amber
+  { fill: "rgba(244,114,182,0.15)", stroke: "#f472b6" }, // pink
+  { fill: "rgba(167,139,250,0.15)", stroke: "#a78bfa" }, // violet
+  { fill: "rgba(52,211,153,0.15)",  stroke: "#34d399" }, // teal
+  { fill: "rgba(251,146,60,0.15)",  stroke: "#fb923c" }, // orange
+  { fill: "rgba(56,189,248,0.15)",  stroke: "#38bdf8" }, // sky
 ];
 
 function formatINR(v: number) {
@@ -41,33 +48,16 @@ export default function HoldingsPieChart({ trades, livePrices }: HoldingsPieChar
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
-    const d = payload[0];
+    const d   = payload[0];
     const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
+    const idx = data.findIndex(x => x.name === d.name) % SLICE_COLOURS.length;
     return (
       <div className="rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-xs shadow-xl">
-        <p className="text-slate-200 font-medium">{d.name}</p>
+        <p style={{ color: SLICE_COLOURS[idx].stroke }} className="font-medium">{d.name}</p>
         <p className="text-slate-400">{formatINR(d.value)} · {pct}%</p>
       </div>
     );
   };
-
-  const CustomLegend = () => (
-    <div className="flex flex-col gap-1.5 justify-center">
-      {data.map((d, i) => {
-        const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
-        return (
-          <div key={d.name} className="flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: COLOURS[i % COLOURS.length] }}/>
-              <span className="text-slate-300 font-mono">{d.name}</span>
-            </div>
-            <span className="text-slate-500 tabular-nums">{pct}%</span>
-          </div>
-        );
-      })}
-    </div>
-  );
 
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 flex flex-col gap-4">
@@ -78,7 +68,8 @@ export default function HoldingsPieChart({ trades, livePrices }: HoldingsPieChar
           No open positions to display.
         </div>
       ) : (
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
+          {/* Donut */}
           <div className="w-36 h-36 shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -86,21 +77,48 @@ export default function HoldingsPieChart({ trades, livePrices }: HoldingsPieChar
                   data={data}
                   cx="50%"
                   cy="50%"
-                  innerRadius={36}
-                  outerRadius={62}
-                  paddingAngle={2}
+                  innerRadius={38}
+                  outerRadius={64}
+                  paddingAngle={3}
                   dataKey="value"
                   strokeWidth={0}
                 >
-                  {data.map((_, i) => (
-                    <Cell key={i} fill={COLOURS[i % COLOURS.length]}/>
-                  ))}
+                  {data.map((_, i) => {
+                    const c = SLICE_COLOURS[i % SLICE_COLOURS.length];
+                    return (
+                      <Cell
+                        key={i}
+                        fill={c.fill}
+                        stroke={c.stroke}
+                        strokeWidth={1.5}
+                      />
+                    );
+                  })}
                 </Pie>
                 <Tooltip content={<CustomTooltip/>}/>
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <CustomLegend/>
+
+          {/* Legend */}
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            {data.map((d, i) => {
+              const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
+              const c   = SLICE_COLOURS[i % SLICE_COLOURS.length];
+              return (
+                <div key={d.name} className="flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0 border"
+                      style={{ backgroundColor: c.fill, borderColor: c.stroke }}
+                    />
+                    <span className="text-slate-300 font-mono truncate">{d.name}</span>
+                  </div>
+                  <span className="text-slate-500 tabular-nums shrink-0">{pct}%</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

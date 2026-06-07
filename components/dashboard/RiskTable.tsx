@@ -71,14 +71,14 @@ export default function RiskTable({ trades, livePrices }: RiskTableProps) {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-700">
-                <th className="text-left pb-2 pr-4">Stock</th>
-                <th className="text-right pb-2 pr-4">Position</th>
-                <th className="text-right pb-2 pr-4">Risk ₹</th>
-                <th className="text-right pb-2 pr-4">Dist. to SL</th>
-                <th className="text-left pb-2 w-32">Risk % of Capital</th>
+                <th className="text-left pb-2 w-1/4">Stock</th>
+                <th className="text-right pb-2 w-1/5">Position</th>
+                <th className="text-right pb-2 w-1/5">Risk ₹</th>
+                <th className="text-right pb-2 w-1/6">Dist. to SL</th>
+                <th className="text-left pb-2">Risk % of Capital</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">

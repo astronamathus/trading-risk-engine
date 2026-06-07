@@ -19,15 +19,20 @@ function formatINR(v: number) {
 }
 
 function StatusBadge({ status }: { status: Trade["status"] }) {
-  const styles = {
-    QUEUED:  "border-amber-700  text-amber-400  bg-amber-900/20",
-    OPEN:    "border-emerald-700 text-emerald-400 bg-emerald-900/20",
-    CLOSED:  "border-slate-600  text-slate-400  bg-slate-800/40",
-    STOPPED: "border-red-800    text-red-400    bg-red-900/20",
+  const styles: Record<Trade["status"], string> = {
+    QUEUED:     "border-amber-700  text-amber-400  bg-amber-900/20",
+    OPEN:       "border-emerald-700 text-emerald-400 bg-emerald-900/20",
+    CLOSED:     "border-slate-600  text-slate-400  bg-slate-800/40",
+    STOPPED:    "border-red-800    text-red-400    bg-red-900/20",
+    TARGET_HIT: "border-blue-600   text-blue-400   bg-blue-900/20",
+  };
+  const labels: Record<Trade["status"], string> = {
+    QUEUED: "QUEUED", OPEN: "OPEN", CLOSED: "CLOSED",
+    STOPPED: "SL HIT", TARGET_HIT: "TG HIT",
   };
   return (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${styles[status]}`}>
-      {status}
+      {labels[status]}
     </span>
   );
 }
@@ -296,7 +301,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
   }
 
   // Fetches live price then writes exit_price + realised_pnl + status
-  async function handleClose(tradeId: string, status: "CLOSED" | "STOPPED") {
+  async function handleClose(tradeId: string, status: "CLOSED" | "STOPPED" | "TARGET_HIT") {
     setConfirm(null);
     setExpandedId(null);
     setLoadingId(tradeId);
@@ -465,7 +470,17 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                     {formatINR(trade.entry_price)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {trade.status !== "OPEN" ? (
+                    {trade.status === "QUEUED" ? (
+                      // Show LTP + distance to entry for queued trades
+                      ltp !== undefined ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-slate-400 text-xs">{formatINR(ltp)}</span>
+                          <span className="text-amber-400 text-xs">
+                            {((trade.entry_price - ltp) / ltp * 100).toFixed(2)}% away
+                          </span>
+                        </div>
+                      ) : <span className="text-slate-600">—</span>
+                    ) : trade.status !== "OPEN" ? (
                       <span className="text-slate-600">—</span>
                     ) : pricesLoading && ltp === undefined ? (
                       <span className="text-slate-600 text-xs animate-pulse">…</span>

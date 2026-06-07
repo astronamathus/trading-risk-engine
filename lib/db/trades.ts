@@ -1,6 +1,5 @@
 // ============================================================
 // lib/db/trades.ts
-// All database operations for trades.
 // ============================================================
 
 import { supabase } from "../supabase";
@@ -19,7 +18,7 @@ export interface Trade {
   exit_price:    number | null;
   realised_pnl:  number | null;
   notes:         string | null;
-  status:        "QUEUED" | "OPEN" | "CLOSED" | "STOPPED";
+  status:        "QUEUED" | "OPEN" | "CLOSED" | "STOPPED" | "TARGET_HIT";
   created_at:    string;
 }
 
@@ -34,7 +33,6 @@ export interface NewTrade {
   risk_amount?:  number;
   capital?:      number;
   notes?:        string;
-  status?:       "QUEUED" | "OPEN";
 }
 
 export async function saveTrade(trade: NewTrade): Promise<Trade> {
@@ -59,7 +57,7 @@ export async function getTrades(userId: string): Promise<Trade[]> {
 
 export async function closeTrade(
   tradeId:    string,
-  status:     "CLOSED" | "STOPPED",
+  status:     "CLOSED" | "STOPPED" | "TARGET_HIT",
   exitPrice:  number,
   quantity:   number,
   entryPrice: number

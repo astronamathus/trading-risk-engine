@@ -68,6 +68,16 @@ export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
     return val > max.val ? { ticker: t.ticker, val } : max;
   }, { ticker: "", val: 0 });
 
+  // Total capital (use average of trades' capital field, fallback 100000)
+  const totalCapital = (() => {
+    const caps = [...open, ...queued].map(t => t.capital).filter(Boolean) as number[];
+    return caps.length > 0 ? caps[0] : 100000;
+  })();
+
+  const riskPct = totalCapital > 0
+    ? ((capitalAtRisk / totalCapital) * 100).toFixed(2)
+    : null;
+
   const pnlColour   = unrealisedPnl >= 0 ? "text-emerald-400" : "text-red-400";
   const lifetimeCol = lifetimePnl   >= 0 ? "text-emerald-400" : "text-red-400";
   const riskColour  = capitalAtRisk > 0   ? "text-amber-400"   : "text-slate-100";
@@ -75,14 +85,31 @@ export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
   return (
     <div className="sticky top-0 z-40 mx-auto max-w-5xl">
       <div className="rounded-2xl border border-slate-700 bg-slate-900/90 backdrop-blur
-        shadow-xl shadow-black/30 px-2 py-3 flex items-center overflow-x-auto gap-0">
+        shadow-xl shadow-black/30 px-2 py-3 flex items-center overflow-x-auto">
 
         <Stat label="Portfolio Value"  value={formatINR(portfolioValue, true)} />
         <Stat label="Deployed"         value={formatINR(deployed, true)} />
         <Stat label="Unrealised P&L"   value={`${unrealisedPnl >= 0 ? "+" : ""}${formatINR(unrealisedPnl, true)}`} colour={pnlColour} />
-        <Stat label="Lifetime P&L"     value={`${lifetimePnl >= 0 ? "+" : ""}${formatINR(lifetimePnl, true)}`}     colour={lifetimeCol} />
-        <Stat label="Capital at Risk"  value={formatINR(capitalAtRisk, true)} colour={riskColour} />
-        <Stat label="Positions"        value={`${open.length} open${queued.length > 0 ? ` · ${queued.length} queued` : ""}`} />
+        <Stat label="Lifetime P&L"     value={`${lifetimePnl >= 0 ? "+" : ""}${formatINR(lifetimePnl, true)}`} colour={lifetimeCol} />
+
+        {/* Capital at risk with faded % */}
+        <div className="flex flex-col gap-0.5 px-4 border-r border-slate-700">
+          <span className="text-xs text-slate-500 uppercase tracking-wider whitespace-nowrap">
+            Capital at Risk
+          </span>
+          <div className="flex items-baseline gap-1.5">
+            <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${riskColour}`}>
+              {formatINR(capitalAtRisk, true)}
+            </span>
+            {riskPct && (
+              <span className="text-xs tabular-nums text-slate-600">
+                {riskPct}%
+              </span>
+            )}
+          </div>
+        </div>
+
+        <Stat label="Positions" value={`${open.length} open${queued.length > 0 ? ` · ${queued.length} queued` : ""}`} />
         {largest.ticker && (
           <Stat
             label="Largest Position"

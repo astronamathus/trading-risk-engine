@@ -70,18 +70,27 @@ export default function LedgerPage() {
       const ltp = prices[trade.ticker];
       if (ltp === undefined) continue;
 
+      // QUEUED → OPEN: price rises to meet entry target
       if (trade.status === "QUEUED" && trade.entry_target !== null) {
-        // Activate only when LTP rises UP to meet the entry target
         if (ltp >= trade.entry_target) {
-          console.log(`[monitor] Activating ${trade.ticker} — LTP ${ltp} ≥ entry target ${trade.entry_target}`);
+          console.log(`[monitor] Activating ${trade.ticker} — LTP ${ltp} ≥ entry ${trade.entry_target}`);
           actions.push(activateTrade(trade.id));
         }
       }
 
       if (trade.status === "OPEN") {
-        // Stop out when LTP hits or falls below stop loss
-        if (ltp <= trade.stop_loss) {
-          console.log(`[monitor] Stopping ${trade.ticker} — LTP ${ltp} ≤ SL ${trade.stop_loss}`);
+        const target = trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
+
+        // OPEN → TARGET_HIT: price reaches or exceeds 2R target
+        if (ltp >= target) {
+          console.log(`[monitor] Target hit ${trade.ticker} — LTP ${ltp} ≥ target ${target}`);
+          actions.push(
+            closeTrade(trade.id, "TARGET_HIT" as any, ltp, trade.quantity, trade.entry_price)
+          );
+        }
+        // OPEN → STOPPED: price hits or drops below stop loss
+        else if (ltp <= trade.stop_loss) {
+          console.log(`[monitor] SL hit ${trade.ticker} — LTP ${ltp} ≤ SL ${trade.stop_loss}`);
           actions.push(
             closeTrade(trade.id, "STOPPED", ltp, trade.quantity, trade.entry_price)
           );
@@ -150,10 +159,11 @@ export default function LedgerPage() {
     return () => clearInterval(interval);
   }, [refresh]);
 
-  const open    = trades.filter(t => t.status === "OPEN").length;
-  const queued  = trades.filter(t => t.status === "QUEUED").length;
-  const closed  = trades.filter(t => t.status === "CLOSED").length;
-  const stopped = trades.filter(t => t.status === "STOPPED").length;
+  const open      = trades.filter(t => t.status === "OPEN").length;
+  const queued    = trades.filter(t => t.status === "QUEUED").length;
+  const closed    = trades.filter(t => t.status === "CLOSED").length;
+  const stopped   = trades.filter(t => t.status === "STOPPED").length;
+  const targetHit = trades.filter(t => t.status === "TARGET_HIT").length;
 
   return (
     <main className="px-4 py-10 sm:px-6 lg:px-8">
@@ -169,20 +179,27 @@ export default function LedgerPage() {
         {/* Status chips + last checked */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-2 flex-wrap">
-            <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
-              text-emerald-400 bg-emerald-900/20">{open} Open</span>
-            {queued > 0 && (
-              <span className="text-xs px-3 py-1 rounded-full border border-amber-700
-                text-amber-400 bg-amber-900/20 flex items-center gap-1">
-                <ClockIcon className="w-3 h-3"/>
-                {queued} Queued
+              <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
+                text-emerald-400 bg-emerald-900/20">{open} Open</span>
+              {queued > 0 && (
+                <span className="text-xs px-3 py-1 rounded-full border border-amber-700
+                  text-amber-400 bg-amber-900/20 flex items-center gap-1">
+                  <ClockIcon className="w-3 h-3"/>
+                  {queued} Queued
+                </span>
+              )}
+              <span className="text-xs px-3 py-1 rounded-full border border-slate-600
+                text-slate-400 bg-slate-800/40"
+                title="Manually closed by you">
+                {closed} Closed
               </span>
-            )}
-            <span className="text-xs px-3 py-1 rounded-full border border-slate-600
-              text-slate-400 bg-slate-800">{closed} Closed</span>
-            <span className="text-xs px-3 py-1 rounded-full border border-red-800
-              text-red-400 bg-red-900/20">{stopped} SL Hit</span>
-          </div>
+              <span className="text-xs px-3 py-1 rounded-full border border-red-800
+                text-red-400 bg-red-900/20">{stopped} SL Hit</span>
+              {targetHit > 0 && (
+                <span className="text-xs px-3 py-1 rounded-full border border-blue-700
+                  text-blue-400 bg-blue-900/20">{targetHit} TG Hit</span>
+              )}
+            </div>
           {lastChecked && (
             <span className="text-xs text-slate-600 flex items-center gap-1">
               <ClockIcon className="w-3 h-3"/>

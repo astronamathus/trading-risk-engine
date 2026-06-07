@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getAnonymousId, ensureUser } from "@/lib/user";
-import { getTrades } from "@/lib/db/trades";
+import { getTrades, activateTrade, closeTrade } from "@/lib/db/trades";
 import type { Trade } from "@/lib/db/trades";
 import FloatingBar        from "@/components/dashboard/FloatingBar";
 import SummaryCards       from "@/components/dashboard/SummaryCards";
@@ -63,6 +63,31 @@ export default function DashboardPage() {
       setTrades(data);
       setLivePrices(prices);
       setLastUpdated(new Date());
+
+      // Run monitor — same logic as ledger page
+      const actions: Promise<void>[] = [];
+      for (const trade of data) {
+        const ltp = prices[trade.ticker];
+        if (ltp === undefined) continue;
+
+        if (trade.status === "QUEUED" && trade.entry_target !== null) {
+          if (ltp >= trade.entry_target) actions.push(activateTrade(trade.id));
+        }
+
+        if (trade.status === "OPEN") {
+          const target = trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
+          if (ltp >= target) {
+            actions.push(closeTrade(trade.id, "TARGET_HIT" as any, ltp, trade.quantity, trade.entry_price));
+          } else if (ltp <= trade.stop_loss) {
+            actions.push(closeTrade(trade.id, "STOPPED", ltp, trade.quantity, trade.entry_price));
+          }
+        }
+      }
+      if (actions.length > 0) {
+        await Promise.allSettled(actions);
+        const updated = await getTrades(id);
+        setTrades(updated);
+      }
     } catch (err) {
       console.error(err);
     } finally {
