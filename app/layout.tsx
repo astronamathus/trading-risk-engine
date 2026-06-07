@@ -4,11 +4,11 @@
 // ============================================================
 
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Manrope } from "next/font/google";
 import "./globals.css";
 import NavBar from "@/components/NavBar";
 
-const inter = Inter({ subsets: ["latin"] });
+const manrope = Manrope({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Trade Risk Manager",
@@ -18,8 +18,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-              <body className={`${inter.className} antialiased min-h-screen`}
-          style={{ backgroundColor: "#0d1117" }}>
+      <body className={`${manrope.className} antialiased min-h-screen`}
+        style={{ backgroundColor: "#0d1117" }}>
         <NavBar />
         {children}
       </body>
