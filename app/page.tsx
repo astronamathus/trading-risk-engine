@@ -22,7 +22,7 @@ export default function HomePage() {
         <CalculatorClient />
 
         <footer className="text-center text-xs text-slate-600">
-          Prices via Yahoo Finance (NSE) & Alpha Vantage (BSE) · Educational use only
+          Prices via Yfinance · Educational use only
         </footer>
 
       </div>
