@@ -1,3 +1,7 @@
+// ============================================================
+// components/dashboard/EquityCurve.tsx — Equity Curve build
+// ============================================================
+
 "use client";
 
 import { useMemo } from "react";
