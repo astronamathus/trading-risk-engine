@@ -546,13 +546,15 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
             const pnlPositive  = totalPnl >= 0;
 
             return (
-              <tfoot className="border-t border-slate-700 bg-slate-800/60">
+            <tfoot className="border-t border-slate-700 bg-slate-800/60">
                 <tr className="text-xs text-slate-400">
                   <td className="px-4 py-3 font-medium text-slate-300">
                     Portfolio
                     <div className="text-slate-600 font-normal">{openTrades.length} open positions</div>
                   </td>
-                  <td colSpan={2} className="px-4 py-3" />
+                  <td className="px-4 py-3"/>
+                  <td className="px-4 py-3"/>
+                  <td className="px-4 py-3"/>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-200">
                     {formatINR(totalValue)}
                   </td>
@@ -565,7 +567,8 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                       {pnlPositive ? "+" : ""}{formatINR(totalPnl)}
                     </span>
                   </td>
-                  <td colSpan={3} className="px-4 py-3" />
+                  <td className="px-4 py-3"/>
+                  <td className="px-4 py-3"/>
                 </tr>
               </tfoot>
             );

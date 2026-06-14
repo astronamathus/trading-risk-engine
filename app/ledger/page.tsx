@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import Ledger from "@/components/Ledger";
-import { getAnonymousId, ensureUser } from "@/lib/user";
 import { getTrades, activateTrade, closeTrade } from "@/lib/db/trades";
 import type { Trade } from "@/lib/db/trades";
 
-const POLL_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const POLL_INTERVAL_MS = 15 * 60 * 1000;
 
-// Inline clock SVG — no emoji
 function ClockIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -20,7 +19,8 @@ function ClockIcon({ className = "w-4 h-4" }: { className?: string }) {
 }
 
 export default function LedgerPage() {
-  const [userId,        setUserId]        = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
+
   const [trades,        setTrades]        = useState<Trade[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState<string | null>(null);
@@ -31,10 +31,9 @@ export default function LedgerPage() {
   const userIdRef = useRef<string | null>(null);
   const tradesRef = useRef<Trade[]>([]);
 
-  useEffect(() => { userIdRef.current = userId; },  [userId]);
+  useEffect(() => { userIdRef.current = user?.id ?? null; }, [user]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
 
-  // ── Fetch live prices for OPEN + QUEUED trades ────────────
   async function fetchLivePrices(allTrades: Trade[]): Promise<Record<string, number>> {
     const monitored     = allTrades.filter(t => t.status === "OPEN" || t.status === "QUEUED");
     const uniqueTickers = [...new Set(monitored.map(t => t.ticker))];
@@ -56,10 +55,6 @@ export default function LedgerPage() {
     return priceMap;
   }
 
-  // ── Monitor logic ─────────────────────────────────────────
-  // QUEUED → OPEN : price rises TO or ABOVE entry_target
-  //   (we only queue when entry > LTP, so we always wait for price to go UP)
-  // OPEN → STOPPED : price falls TO or BELOW stop_loss
   const runMonitor = useCallback(async (
     currentTrades: Trade[],
     prices: Record<string, number>
@@ -70,30 +65,19 @@ export default function LedgerPage() {
       const ltp = prices[trade.ticker];
       if (ltp === undefined) continue;
 
-      // QUEUED → OPEN: price rises to meet entry target
       if (trade.status === "QUEUED" && trade.entry_target !== null) {
         if (ltp >= trade.entry_target) {
-          console.log(`[monitor] Activating ${trade.ticker} — LTP ${ltp} ≥ entry ${trade.entry_target}`);
+          console.log(`[monitor] Activating ${trade.ticker}`);
           actions.push(activateTrade(trade.id));
         }
       }
 
       if (trade.status === "OPEN") {
         const target = trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
-
-        // OPEN → TARGET_HIT: price reaches or exceeds 2R target
         if (ltp >= target) {
-          console.log(`[monitor] Target hit ${trade.ticker} — LTP ${ltp} ≥ target ${target}`);
-          actions.push(
-            closeTrade(trade.id, "TARGET_HIT" as any, ltp, trade.quantity, trade.entry_price)
-          );
-        }
-        // OPEN → STOPPED: price hits or drops below stop loss
-        else if (ltp <= trade.stop_loss) {
-          console.log(`[monitor] SL hit ${trade.ticker} — LTP ${ltp} ≤ SL ${trade.stop_loss}`);
-          actions.push(
-            closeTrade(trade.id, "STOPPED", ltp, trade.quantity, trade.entry_price)
-          );
+          actions.push(closeTrade(trade.id, "TARGET_HIT", ltp, trade.quantity, trade.entry_price));
+        } else if (ltp <= trade.stop_loss) {
+          actions.push(closeTrade(trade.id, "STOPPED", ltp, trade.quantity, trade.entry_price));
         }
       }
     }
@@ -105,7 +89,6 @@ export default function LedgerPage() {
     return false;
   }, []);
 
-  // ── Full refresh ──────────────────────────────────────────
   const refresh = useCallback(async (uid?: string) => {
     const id = uid ?? userIdRef.current;
     if (!id) return;
@@ -132,30 +115,21 @@ export default function LedgerPage() {
     }
   }, [runMonitor]);
 
-  // ── Bootstrap ─────────────────────────────────────────────
+  // ── Bootstrap: wait for auth, then load trades ────────────
   useEffect(() => {
-    async function bootstrap() {
-      try {
-        const anonymousId = getAnonymousId();
-        const uid         = await ensureUser(anonymousId);
-        setUserId(uid);
-        userIdRef.current = uid;
-        await refresh(uid);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load ledger.");
-      } finally {
-        setLoading(false);
-      }
+    if (authLoading) return;           // wait for auth to resolve
+    if (!user) {
+      setLoading(false);
+      setError("Please sign in to view your ledger.");
+      return;
     }
-    bootstrap();
-  }, [refresh]);
+    userIdRef.current = user.id;
+    refresh(user.id).finally(() => setLoading(false));
+  }, [user, authLoading, refresh]);
 
   // ── 15-min polling ────────────────────────────────────────
   useEffect(() => {
-    const interval = setInterval(() => {
-      console.log("[monitor] 15-min poll triggered");
-      refresh();
-    }, POLL_INTERVAL_MS);
+    const interval = setInterval(() => refresh(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [refresh]);
 
@@ -176,30 +150,28 @@ export default function LedgerPage() {
           </p>
         </div>
 
-        {/* Status chips + last checked */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-2 flex-wrap">
-              <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
-                text-emerald-400 bg-emerald-900/20">{open} Open</span>
-              {queued > 0 && (
-                <span className="text-xs px-3 py-1 rounded-full border border-amber-700
-                  text-amber-400 bg-amber-900/20 flex items-center gap-1">
-                  <ClockIcon className="w-3 h-3"/>
-                  {queued} Queued
-                </span>
-              )}
-              <span className="text-xs px-3 py-1 rounded-full border border-slate-600
-                text-slate-400 bg-slate-800/40"
-                title="Manually closed by you">
-                {closed} Closed
+            <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
+              text-emerald-400 bg-emerald-900/20">{open} Open</span>
+            {queued > 0 && (
+              <span className="text-xs px-3 py-1 rounded-full border border-amber-700
+                text-amber-400 bg-amber-900/20 flex items-center gap-1">
+                <ClockIcon className="w-3 h-3"/>
+                {queued} Queued
               </span>
-              <span className="text-xs px-3 py-1 rounded-full border border-red-800
-                text-red-400 bg-red-900/20">{stopped} SL Hit</span>
-              {targetHit > 0 && (
-                <span className="text-xs px-3 py-1 rounded-full border border-blue-700
-                  text-blue-400 bg-blue-900/20">{targetHit} TG Hit</span>
-              )}
-            </div>
+            )}
+            <span className="text-xs px-3 py-1 rounded-full border border-slate-600
+              text-slate-400 bg-slate-800/40" title="Manually closed by you">
+              {closed} Closed
+            </span>
+            <span className="text-xs px-3 py-1 rounded-full border border-red-800
+              text-red-400 bg-red-900/20">{stopped} SL Hit</span>
+            {targetHit > 0 && (
+              <span className="text-xs px-3 py-1 rounded-full border border-blue-700
+                text-blue-400 bg-blue-900/20">{targetHit} TG Hit</span>
+            )}
+          </div>
           {lastChecked && (
             <span className="text-xs text-slate-600 flex items-center gap-1">
               <ClockIcon className="w-3 h-3"/>
