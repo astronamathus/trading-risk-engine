@@ -20,16 +20,16 @@ function Stat({
   colour?: string; border?: boolean;
 }) {
   return (
-    <div className={`flex flex-col gap-0.5 px-5 ${border ? "border-r border-slate-700/60" : ""} shrink-0`}>
-      <span className="text-xs text-slate-500 uppercase tracking-wider whitespace-nowrap">
+    <div className={`flex flex-col gap-0.5 px-5 ${border ? "border-r border-slate-700/60" : ""} shrink-0 min-w-0`}>
+      <span className="text-xs text-slate-500 uppercase tracking-wider whitespace-nowrap h-4 flex items-center">
         {label}
       </span>
       <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${colour}`}>
         {value}
       </span>
-      {sub && (
-        <span className="text-xs text-slate-600 whitespace-nowrap">{sub}</span>
-      )}
+      <span className="text-xs text-slate-600 whitespace-nowrap h-4 flex items-center">
+        {sub ?? ""}
+      </span>
     </div>
   );
 }
