@@ -56,9 +56,23 @@ Expandable trade rows provide:
 
 ---
 
-### Risk-First Architecture
+### Portfolio Dashboard
 
-The platform prioritizes:
+The platform displays relevant analytics:
+
+* Position Risk Size Donut Chart
+* Equity Curve with M2M
+* Lifetime PnL
+* Average open R
+* Realised & Unrealised PnL
+* Portfolio Risk
+* Win Rate
+* Average Win to Loss Ratio
+* Open Trade Health
+* Risk Breakdown Table
+
+
+These features improve traders awareness on:
 
 * Downside protection
 * Portfolio heat awareness
@@ -179,9 +193,7 @@ The interface is optimized for:
 
 # Future Roadmap
 
-* Portfolio dashboard
 * Advanced trade analytics
-* Multi-user desk support
 * Mobile companion view
 * Risk violation engine
 
