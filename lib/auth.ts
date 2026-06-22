@@ -8,12 +8,14 @@
 import { supabase } from "./supabase";
 
 export interface AppUser {
-  id:          string;   // trader_users.id (our DB row)
-  authId:      string;   // auth.users.id (Supabase auth)
-  email:       string;
-  name:        string;
-  avatarUrl:   string | null;
-  role:        "user" | "admin";
+  id:        string;
+  authId:    string;
+  email:     string;
+  name:      string;
+  avatarUrl: string | null;
+  role:      "user" | "admin";
+  userType:  "indie" | "org_member" | "org_admin" | null; // null = not yet onboarded
+  orgId:     string | null;
 }
 
 /**
@@ -63,12 +65,11 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
   // Check if trader_users row already exists for this auth user
   const { data: existing } = await supabase
     .from("trader_users")
-    .select("id, role")
+    .select("id, role, user_type, org_id")
     .eq("auth_user_id", authUser.id)
     .single();
 
   if (existing) {
-    // If there's an anonymous_id, migrate any orphaned trades
     if (anonymousId) await migrateAnonymousTrades(anonymousId, existing.id);
     return {
       id:        existing.id,
@@ -77,22 +78,24 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
       name,
       avatarUrl: avatar,
       role:      existing.role as "user" | "admin",
+      userType:  existing.user_type as AppUser["userType"],
+      orgId:     existing.org_id ?? null,
     };
   }
 
-  // First login — create trader_users row
+  // First login — create trader_users row (user_type null = needs onboarding)
   const { data: created, error } = await supabase
     .from("trader_users")
     .insert({
-      anonymous_id:  authUser.id, // use auth id as anonymous_id for uniqueness
-      auth_user_id:  authUser.id,
+      anonymous_id: authUser.id,
+      auth_user_id: authUser.id,
+      user_type:    null,   // triggers onboarding
     })
-    .select("id, role")
+    .select("id, role, user_type, org_id")
     .single();
 
   if (error || !created) throw new Error(`Failed to create user: ${error?.message}`);
 
-  // Migrate anonymous trades if any
   if (anonymousId) await migrateAnonymousTrades(anonymousId, created.id);
 
   return {
@@ -102,6 +105,8 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
     name,
     avatarUrl: avatar,
     role:      created.role as "user" | "admin",
+    userType:  null,   // will be set after onboarding
+    orgId:     null,
   };
 }
 
