@@ -1,27 +1,38 @@
 "use client";
 
+// ============================================================
+// app/leaderboard/page.tsx
+//
+// Changes vs original:
+//   - Single get_org_leaderboard RPC call instead of per-member
+//     getTrades() — much faster, no N+1, fully server-controlled
+//   - Members see: rank, name, avatar, trade counts only
+//   - Admins see:  above + lifetime/monthly PnL, win rate, avg R
+//   - Names and avatars come from display_name/avatar_url on
+//     trader_users (stored on login — no admin API required)
+// ============================================================
+
 import { useState, useEffect, useCallback } from "react";
 import { useRouter }  from "next/navigation";
 import { useAuth }    from "@/components/AuthProvider";
 import { getUserOrg } from "@/lib/db/org";
-import { getTrades }  from "@/lib/db/trades";
 import { supabase }   from "@/lib/supabase";
-import type { Trade } from "@/lib/db/trades";
 
 type SortMetric = "lifetime_pnl" | "monthly_pnl" | "win_rate" | "avg_r";
 
-interface MemberStats {
-  id:          string;
-  name:        string;
-  avatarUrl:   string | null;
-  email:       string;
-  isCurrentUser: boolean;
-  lifetimePnl: number;
-  monthlyPnl:  number;
-  winRate:     number | null;
-  avgR:        number | null;
-  totalTrades: number;
-  openTrades:  number;
+interface LeaderboardRow {
+  rank:            number;
+  user_id:         string;
+  display_name:    string | null;
+  avatar_url:      string | null;
+  is_current_user: boolean;
+  total_closed:    number;
+  open_trades:     number;
+  // Admin-only fields (undefined for members)
+  lifetime_pnl?:   number;
+  monthly_pnl?:    number;
+  win_rate?:       number | null;
+  avg_r?:          number | null;
 }
 
 function formatINR(v: number) {
@@ -40,11 +51,16 @@ function Medal({ rank }: { rank: number }) {
 }
 
 function SortButton({
-  label, metric, current, onChange,
+  label, metric, current, onChange, adminOnly, isAdmin,
 }: {
-  label: string; metric: SortMetric;
-  current: SortMetric; onChange: (m: SortMetric) => void;
+  label:     string;
+  metric:    SortMetric;
+  current:   SortMetric;
+  onChange:  (m: SortMetric) => void;
+  adminOnly: boolean;
+  isAdmin:   boolean;
 }) {
+  if (adminOnly && !isAdmin) return null;
   const active = current === metric;
   return (
     <button
@@ -64,93 +80,34 @@ export default function LeaderboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [stats,   setStats]   = useState<MemberStats[]>([]);
+  const [rows,    setRows]    = useState<LeaderboardRow[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
   const [sort,    setSort]    = useState<SortMetric>("lifetime_pnl");
-  const [orgName, setOrgName] = useState<string>("");
+  const [orgName, setOrgName] = useState("");
+  const [orgId,   setOrgId]   = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (sortMetric: SortMetric = sort) => {
     if (!user) return;
 
-    // Must be in an org
     const org = await getUserOrg(user.id);
     if (!org) { router.replace("/dashboard"); return; }
     setOrgName(org.name);
+    setOrgId(org.id);
 
-    // Get all members of the org
-    const { data: members } = await supabase
-      .from("trader_users")
-      .select("id, auth_user_id, org_role")
-      .eq("org_id", org.id);
+    const { data, error: rpcErr } = await supabase.rpc("get_org_leaderboard", {
+      p_org_id: org.id,
+      p_sort:   sortMetric,
+    });
 
-    if (!members) { setLoading(false); return; }
+    if (rpcErr) { setError(rpcErr.message); setLoading(false); return; }
+    if (!data?.ok) { setError(data?.error ?? "Failed to load leaderboard"); setLoading(false); return; }
 
-    const now       = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
-    // For each member, fetch trades and compute stats
-    const allStats = await Promise.all(members.map(async m => {
-      // Get auth user metadata
-      const { data: session } = await supabase.auth.getUser();
-      const isSelf = m.auth_user_id === user.authId;
-
-      // Fetch trades for this member
-      const trades = await getTrades(m.id).catch(() => [] as Trade[]);
-
-      const closed = trades.filter(
-        t => t.status === "CLOSED" || t.status === "STOPPED" || t.status === "TARGET_HIT"
-      );
-      const open   = trades.filter(t => t.status === "OPEN");
-
-      const lifetimePnl = closed.reduce((s, t) => s + (t.realised_pnl ?? 0), 0);
-      const monthlyPnl  = closed
-        .filter(t => t.created_at >= monthStart)
-        .reduce((s, t) => s + (t.realised_pnl ?? 0), 0);
-
-      const winners  = closed.filter(t => (t.realised_pnl ?? 0) > 0);
-      const winRate  = closed.length > 0
-        ? (winners.length / closed.length) * 100
-        : null;
-
-      const rValues = closed
-        .map(t => t.risk_amount && t.risk_amount > 0
-          ? (t.realised_pnl ?? 0) / t.risk_amount
-          : null)
-        .filter((r): r is number => r !== null);
-      const avgR = rValues.length > 0
-        ? rValues.reduce((s, r) => s + r, 0) / rValues.length
-        : null;
-
-      // Get name from session if self, otherwise from stored metadata
-      let name      = "Trader";
-      let avatarUrl = null;
-      let email     = "";
-
-      if (isSelf && session?.user) {
-        name      = session.user.user_metadata?.full_name ?? "You";
-        avatarUrl = session.user.user_metadata?.avatar_url ?? null;
-        email     = session.user.email ?? "";
-      }
-
-      return {
-        id:           m.id,
-        name,
-        avatarUrl,
-        email,
-        isCurrentUser: isSelf,
-        lifetimePnl,
-        monthlyPnl,
-        winRate,
-        avgR,
-        totalTrades:  closed.length,
-        openTrades:   open.length,
-      } as MemberStats;
-    }));
-
-    setStats(allStats);
+    setIsAdmin(data.is_admin ?? false);
+    setRows(data.rows ?? []);
     setLoading(false);
-  }, [user, router]);
+  }, [user, router, sort]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -158,14 +115,14 @@ export default function LeaderboardPage() {
     load();
   }, [user, authLoading, load]);
 
-  const sorted = [...stats].sort((a, b) => {
-    switch (sort) {
-      case "lifetime_pnl": return b.lifetimePnl - a.lifetimePnl;
-      case "monthly_pnl":  return b.monthlyPnl  - a.monthlyPnl;
-      case "win_rate":     return (b.winRate ?? -1) - (a.winRate ?? -1);
-      case "avg_r":        return (b.avgR    ?? -999) - (a.avgR ?? -999);
+  // Re-fetch when sort changes (RPC handles ordering server-side)
+  function handleSort(metric: SortMetric) {
+    setSort(metric);
+    if (orgId) {
+      setLoading(true);
+      load(metric);
     }
-  });
+  }
 
   if (loading || authLoading) return (
     <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-500">
@@ -183,7 +140,9 @@ export default function LeaderboardPage() {
 
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-white">Leaderboard</h1>
-          <p className="text-sm text-slate-400">{orgName} · All traders ranked</p>
+          <p className="text-sm text-slate-400">
+            {orgName} · {isAdmin ? "All metrics visible" : "Rank and trade count only"}
+          </p>
         </div>
 
         {error && (
@@ -191,100 +150,113 @@ export default function LeaderboardPage() {
             text-sm text-red-300">{error}</div>
         )}
 
-        {/* Sort controls */}
-        <div className="flex gap-2 flex-wrap">
-          <SortButton label="Lifetime P&L" metric="lifetime_pnl" current={sort} onChange={setSort}/>
-          <SortButton label="Monthly P&L"  metric="monthly_pnl"  current={sort} onChange={setSort}/>
-          <SortButton label="Win Rate"     metric="win_rate"      current={sort} onChange={setSort}/>
-          <SortButton label="Avg R"        metric="avg_r"         current={sort} onChange={setSort}/>
-        </div>
+        {/* Sort controls — metric sorts only shown to admins */}
+        {isAdmin && (
+          <div className="flex gap-2 flex-wrap">
+            <SortButton label="Lifetime P&L" metric="lifetime_pnl" current={sort}
+              onChange={handleSort} adminOnly isAdmin />
+            <SortButton label="Monthly P&L"  metric="monthly_pnl"  current={sort}
+              onChange={handleSort} adminOnly isAdmin />
+            <SortButton label="Win Rate"     metric="win_rate"      current={sort}
+              onChange={handleSort} adminOnly isAdmin />
+            <SortButton label="Avg R"        metric="avg_r"         current={sort}
+              onChange={handleSort} adminOnly isAdmin />
+          </div>
+        )}
+
+        {/* Privacy notice for members */}
+        {!isAdmin && (
+          <div className="rounded-xl border border-slate-700 bg-slate-800/30 px-4 py-3
+            text-xs text-slate-500">
+            Rankings are visible to all members. Detailed metrics are admin-only.
+          </div>
+        )}
 
         {/* Leaderboard table */}
         <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6">
-          {sorted.length === 0 ? (
+          {rows.length === 0 ? (
             <p className="text-sm text-slate-600 text-center py-8">No traders yet.</p>
           ) : (
             <div className="flex flex-col gap-3">
-              {sorted.map((s, idx) => {
-                const isTop = idx === 0;
-                return (
-                  <div
-                    key={s.id}
-                    className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${
-                      s.isCurrentUser
-                        ? "border border-blue-700 bg-blue-900/10"
-                        : isTop
-                          ? "border border-amber-800/50 bg-amber-900/10"
-                          : "hover:bg-slate-700/30"
-                    }`}
-                  >
-                    {/* Rank */}
-                    <div className="w-6 flex items-center justify-center shrink-0">
-                      <Medal rank={idx + 1}/>
+              {rows.map((row) => (
+                <div
+                  key={row.user_id}
+                  className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${
+                    row.is_current_user
+                      ? "border border-blue-700 bg-blue-900/10"
+                      : row.rank === 1
+                        ? "border border-amber-800/50 bg-amber-900/10"
+                        : "hover:bg-slate-700/30"
+                  }`}
+                >
+                  {/* Rank */}
+                  <div className="w-6 flex items-center justify-center shrink-0">
+                    <Medal rank={row.rank}/>
+                  </div>
+
+                  {/* Avatar */}
+                  {row.avatar_url ? (
+                    <img src={row.avatar_url} alt={row.display_name ?? ""}
+                      className="w-8 h-8 rounded-full border border-slate-600 shrink-0"/>
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center
+                      justify-center text-sm font-bold text-slate-300 shrink-0">
+                      {(row.display_name ?? "?").charAt(0).toUpperCase()}
                     </div>
+                  )}
 
-                    {/* Avatar */}
-                    {s.avatarUrl ? (
-                      <img src={s.avatarUrl} alt={s.name}
-                        className="w-8 h-8 rounded-full border border-slate-600 shrink-0"/>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center
-                        justify-center text-sm font-bold text-slate-300 shrink-0">
-                        {s.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-
-                    {/* Name */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-slate-200 truncate">
-                          {s.name}
-                        </span>
-                        {s.isCurrentUser && (
-                          <span className="text-xs text-slate-600">(you)</span>
-                        )}
-                      </div>
-                      <span className="text-xs text-slate-500">
-                        {s.totalTrades} closed · {s.openTrades} open
+                  {/* Name + trade count */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-200 truncate">
+                        {row.display_name ?? "Trader"}
                       </span>
+                      {row.is_current_user && (
+                        <span className="text-xs text-slate-600">(you)</span>
+                      )}
                     </div>
+                    <span className="text-xs text-slate-500">
+                      {row.total_closed} closed · {row.open_trades} open
+                    </span>
+                  </div>
 
-                    {/* Stats */}
+                  {/* Admin metrics */}
+                  {isAdmin && (
                     <div className="flex items-center gap-6 shrink-0">
-                      {sort === "lifetime_pnl" && (
+                      {sort === "lifetime_pnl" && row.lifetime_pnl !== undefined && (
                         <StatCell
                           label="Lifetime P&L"
-                          value={formatINR(s.lifetimePnl)}
-                          positive={s.lifetimePnl >= 0}
+                          value={formatINR(row.lifetime_pnl)}
+                          positive={row.lifetime_pnl >= 0}
                         />
                       )}
-                      {sort === "monthly_pnl" && (
+                      {sort === "monthly_pnl" && row.monthly_pnl !== undefined && (
                         <StatCell
                           label="Monthly P&L"
-                          value={formatINR(s.monthlyPnl)}
-                          positive={s.monthlyPnl >= 0}
+                          value={formatINR(row.monthly_pnl)}
+                          positive={row.monthly_pnl >= 0}
                         />
                       )}
                       {sort === "win_rate" && (
                         <StatCell
                           label="Win Rate"
-                          value={s.winRate !== null ? `${s.winRate.toFixed(0)}%` : "—"}
-                          positive={s.winRate !== null && s.winRate >= 50}
+                          value={row.win_rate != null ? `${row.win_rate.toFixed(0)}%` : "—"}
+                          positive={row.win_rate != null && row.win_rate >= 50}
                         />
                       )}
                       {sort === "avg_r" && (
                         <StatCell
                           label="Avg R"
-                          value={s.avgR !== null
-                            ? `${s.avgR >= 0 ? "+" : ""}${s.avgR.toFixed(2)}R`
+                          value={row.avg_r != null
+                            ? `${row.avg_r >= 0 ? "+" : ""}${row.avg_r.toFixed(2)}R`
                             : "—"}
-                          positive={s.avgR !== null && s.avgR >= 0}
+                          positive={row.avg_r != null && row.avg_r >= 0}
                         />
                       )}
                     </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -294,9 +266,9 @@ export default function LeaderboardPage() {
   );
 }
 
-function StatCell({
-  label, value, positive,
-}: { label: string; value: string; positive: boolean }) {
+function StatCell({ label, value, positive }: {
+  label: string; value: string; positive: boolean;
+}) {
   return (
     <div className="flex flex-col items-end gap-0.5">
       <span className="text-xs text-slate-500">{label}</span>

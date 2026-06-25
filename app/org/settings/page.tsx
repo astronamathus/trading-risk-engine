@@ -1,8 +1,19 @@
 "use client";
 
+// ============================================================
+// app/org/settings/page.tsx
+// Org admin settings: invite generation + member management.
+//
+// Changes vs original:
+//   - getOrgMembers now returns display_name/avatar_url from
+//     trader_users (no admin API, no "—" fallbacks)
+//   - promoteMember/removeMember now pass orgId to call RPCs
+//   - Supports owner/admin/member roles from org_memberships
+// ============================================================
+
 import { useState, useEffect, useCallback } from "react";
-import { useRouter }  from "next/navigation";
-import { useAuth }    from "@/components/AuthProvider";
+import { useRouter }   from "next/navigation";
+import { useAuth }     from "@/components/AuthProvider";
 import {
   getUserOrg, getOrgMembers, createInvite,
   promoteMember, removeMember,
@@ -23,16 +34,28 @@ function CopyIcon() {
   );
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  owner:  "Owner",
+  admin:  "Admin",
+  member: "Trader",
+};
+
+const ROLE_BADGE: Record<string, string> = {
+  owner:  "border-purple-700 text-purple-400 bg-purple-900/20",
+  admin:  "border-amber-700  text-amber-400  bg-amber-900/20",
+  member: "border-slate-600  text-slate-400  bg-slate-800/40",
+};
+
 export default function OrgSettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [org,       setOrg]       = useState<Organisation | null>(null);
-  const [members,   setMembers]   = useState<OrgMember[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState<string | null>(null);
+  const [org,     setOrg]     = useState<Organisation | null>(null);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
 
-  // Invite generation state
+  // Invite state
   const [inviteRole,    setInviteRole]    = useState<"member" | "admin">("member");
   const [inviteExpiry,  setInviteExpiry]  = useState(7);
   const [inviteMaxUses, setInviteMaxUses] = useState<number | "unlimited">(1);
@@ -40,7 +63,7 @@ export default function OrgSettingsPage() {
   const [generating,    setGenerating]    = useState(false);
   const [copied,        setCopied]        = useState(false);
 
-  // Member action state
+  // Per-row action state
   const [actionId, setActionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -49,8 +72,12 @@ export default function OrgSettingsPage() {
       const orgData = await getUserOrg(user.id);
       if (!orgData) { router.replace("/onboarding"); return; }
       setOrg(orgData);
-      const memberData = await getOrgMembers(orgData.id);
-      setMembers(memberData);
+
+      // Only admins/owners can view members (RPC enforces this)
+      if (user.userType === "org_admin") {
+        const memberData = await getOrgMembers(orgData.id);
+        setMembers(memberData);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings.");
     } finally {
@@ -60,7 +87,8 @@ export default function OrgSettingsPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) { router.replace("/auth"); return; }
+    if (!user)                      { router.replace("/auth");       return; }
+    if (user.userType !== "org_admin") { router.replace("/dashboard"); return; }
     load();
   }, [user, authLoading, load]);
 
@@ -68,6 +96,7 @@ export default function OrgSettingsPage() {
     if (!user || !org) return;
     setGenerating(true);
     setGeneratedCode(null);
+    setError(null);
     try {
       const invite = await createInvite(
         org.id,
@@ -86,16 +115,16 @@ export default function OrgSettingsPage() {
 
   function copyInviteLink() {
     if (!generatedCode) return;
-    const url = `${window.location.origin}/join/${generatedCode}`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(`${window.location.origin}/join/${generatedCode}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
   async function handlePromote(memberId: string) {
+    if (!org) return;
     setActionId(memberId);
     try {
-      await promoteMember(memberId);
+      await promoteMember(memberId, org.id, "admin");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to promote member.");
@@ -105,10 +134,11 @@ export default function OrgSettingsPage() {
   }
 
   async function handleRemove(memberId: string) {
+    if (!org) return;
     if (!confirm("Remove this member from the organisation?")) return;
     setActionId(memberId);
     try {
-      await removeMember(memberId);
+      await removeMember(memberId, org.id);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove member.");
@@ -117,18 +147,17 @@ export default function OrgSettingsPage() {
     }
   }
 
-  if (loading || authLoading) {
-    return (
-      <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-500">
-        <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-        </svg>
-        <span className="text-sm">Loading…</span>
-      </main>
-    );
-  }
+  if (loading || authLoading) return (
+    <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-500">
+      <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+      </svg>
+      <span className="text-sm">Loading…</span>
+    </main>
+  );
 
+  const owners  = members.filter(m => m.org_role === "owner");
   const admins  = members.filter(m => m.org_role === "admin");
   const traders = members.filter(m => m.org_role === "member");
 
@@ -139,9 +168,7 @@ export default function OrgSettingsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              {org?.name}
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">{org?.name}</h1>
             <p className="text-sm text-slate-400 mt-0.5">Organisation settings</p>
           </div>
           <span className="text-xs px-2 py-1 rounded-full border border-amber-700
@@ -152,18 +179,15 @@ export default function OrgSettingsPage() {
 
         {error && (
           <div className="rounded-xl border border-red-700 bg-red-900/30 px-4 py-3
-            text-sm text-red-300">
-            {error}
-          </div>
+            text-sm text-red-300">{error}</div>
         )}
 
-        {/* ── Invite generation ── */}
+        {/* Invite generation */}
         <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6
           flex flex-col gap-5">
           <h2 className="text-sm font-semibold text-slate-200">Generate Invite Link</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Role */}
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-500 uppercase tracking-wider">Role</label>
               <select
@@ -176,7 +200,6 @@ export default function OrgSettingsPage() {
               </select>
             </div>
 
-            {/* Expiry */}
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-500 uppercase tracking-wider">Expires in</label>
               <select
@@ -190,7 +213,6 @@ export default function OrgSettingsPage() {
               </select>
             </div>
 
-            {/* Max uses */}
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-500 uppercase tracking-wider">Max uses</label>
               <select
@@ -218,7 +240,6 @@ export default function OrgSettingsPage() {
             {generating ? "Generating…" : "Generate invite link"}
           </button>
 
-          {/* Generated link */}
           {generatedCode && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 rounded-lg border border-slate-600
@@ -236,13 +257,13 @@ export default function OrgSettingsPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-600">
-                Share this link with your team. It expires in {inviteExpiry} day{inviteExpiry > 1 ? "s" : ""}.
+                Expires in {inviteExpiry} day{inviteExpiry > 1 ? "s" : ""}.
               </p>
             </div>
           )}
         </section>
 
-        {/* ── Members ── */}
+        {/* Members */}
         <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6
           flex flex-col gap-5">
           <div className="flex items-center justify-between">
@@ -250,38 +271,17 @@ export default function OrgSettingsPage() {
             <span className="text-xs text-slate-500">{members.length} total</span>
           </div>
 
-          {/* Admins */}
-          {admins.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <p className="text-xs uppercase tracking-wider text-slate-500 mb-2">Admins</p>
-              {admins.map(m => (
-                <MemberRow
-                  key={m.id}
-                  member={m}
-                  currentUserId={user!.id}
-                  loading={actionId === m.id}
-                  onRemove={() => handleRemove(m.id)}
-                  isAdmin
-                />
-              ))}
-            </div>
+          {owners.length > 0 && (
+            <RoleGroup label="Owner" members={owners} currentUserId={user!.id}
+              loading={actionId} />
           )}
-
-          {/* Traders */}
+          {admins.length > 0 && (
+            <RoleGroup label="Admins" members={admins} currentUserId={user!.id}
+              loading={actionId} onRemove={handleRemove} />
+          )}
           {traders.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <p className="text-xs uppercase tracking-wider text-slate-500 mb-2">Traders</p>
-              {traders.map(m => (
-                <MemberRow
-                  key={m.id}
-                  member={m}
-                  currentUserId={user!.id}
-                  loading={actionId === m.id}
-                  onPromote={() => handlePromote(m.id)}
-                  onRemove={() => handleRemove(m.id)}
-                />
-              ))}
-            </div>
+            <RoleGroup label="Traders" members={traders} currentUserId={user!.id}
+              loading={actionId} onPromote={handlePromote} onRemove={handleRemove} />
           )}
 
           {members.length === 0 && (
@@ -296,46 +296,77 @@ export default function OrgSettingsPage() {
   );
 }
 
-// ── Member row sub-component ──────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────
+
+function RoleGroup({
+  label, members, currentUserId, loading, onPromote, onRemove,
+}: {
+  label:         string;
+  members:       OrgMember[];
+  currentUserId: string;
+  loading:       string | null;
+  onPromote?:    (id: string) => void;
+  onRemove?:     (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-xs uppercase tracking-wider text-slate-500 mb-2">{label}</p>
+      {members.map(m => (
+        <MemberRow
+          key={m.id}
+          member={m}
+          currentUserId={currentUserId}
+          isLoading={loading === m.id}
+          onPromote={onPromote ? () => onPromote(m.id) : undefined}
+          onRemove={onRemove  ? () => onRemove(m.id)  : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
 function MemberRow({
-  member, currentUserId, loading, onPromote, onRemove, isAdmin = false,
+  member, currentUserId, isLoading, onPromote, onRemove,
 }: {
   member:        OrgMember;
   currentUserId: string;
-  loading:       boolean;
+  isLoading:     boolean;
   onPromote?:    () => void;
   onRemove?:     () => void;
-  isAdmin?:      boolean;
 }) {
   const isCurrentUser = member.id === currentUserId;
+  const initials      = (member.display_name ?? "?").charAt(0).toUpperCase();
 
   return (
     <div className={`flex items-center justify-between py-2.5 px-3 rounded-xl
-      transition-colors ${loading ? "opacity-40 pointer-events-none" : "hover:bg-slate-700/30"}`}>
+      transition-colors ${isLoading ? "opacity-40 pointer-events-none" : "hover:bg-slate-700/30"}`}>
       <div className="flex items-center gap-3">
         {member.avatar_url ? (
-          <img src={member.avatar_url} alt={member.name}
+          <img src={member.avatar_url} alt={member.display_name ?? ""}
             className="w-7 h-7 rounded-full border border-slate-600 shrink-0"/>
         ) : (
           <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center
             justify-center text-xs font-bold text-slate-300 shrink-0">
-            {member.name?.charAt(0)?.toUpperCase() ?? "?"}
+            {initials}
           </div>
         )}
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-200">{member.name}</span>
-            {isCurrentUser && (
-              <span className="text-xs text-slate-600">(you)</span>
-            )}
+            <span className="text-sm text-slate-200">
+              {member.display_name ?? "Unknown"}
+            </span>
+            {isCurrentUser && <span className="text-xs text-slate-600">(you)</span>}
           </div>
-          <span className="text-xs text-slate-500">{member.email}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded border
+            ${ROLE_BADGE[member.org_role] ?? ROLE_BADGE.member}`}>
+            {ROLE_LABELS[member.org_role] ?? member.org_role}
+          </span>
         </div>
       </div>
 
       {!isCurrentUser && (
         <div className="flex items-center gap-2">
-          {!isAdmin && onPromote && (
+          {onPromote && (
             <button
               onClick={onPromote}
               className="text-xs px-2 py-1 rounded-lg border border-amber-700

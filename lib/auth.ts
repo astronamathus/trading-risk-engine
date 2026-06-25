@@ -1,68 +1,53 @@
 // ============================================================
 // lib/auth.ts
 // Auth helpers built on Supabase Auth.
-// Handles Google OAuth sign-in, session management,
-// and linking anonymous trades to real accounts on first login.
+// Changes vs original:
+//   - ensureAuthUser now saves display_name + avatar_url on
+//     trader_users so leaderboard can show real names/avatars
+//     without needing the admin API
+//   - orgId retained on AppUser for backwards-compat routing
 // ============================================================
 
 import { supabase } from "./supabase";
 
 export interface AppUser {
-  id:        string;
-  authId:    string;
-  email:     string;
-  name:      string;
-  avatarUrl: string | null;
-  role:      "user" | "admin";
-  userType:  "indie" | "org_member" | "org_admin" | null; // null = not yet onboarded
-  orgId:     string | null;
+  id:          string;
+  authId:      string;
+  email:       string;
+  name:        string;
+  avatarUrl:   string | null;
+  role:        "user" | "admin";
+  userType:    "indie" | "org_member" | "org_admin" | null;
+  orgId:       string | null; // first org (for routing); use org_memberships for full list
 }
 
-/**
- * Sign in with Google — redirects to Google then back to /auth/callback
- */
 export async function signInWithGoogle(): Promise<void> {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options:  {
-      redirectTo: `${window.location.origin}/auth/callback`,
-    },
+    options:  { redirectTo: `${window.location.origin}/auth/callback` },
   });
   if (error) throw new Error(error.message);
 }
 
-/**
- * Sign out current user
- */
 export async function signOut(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) throw new Error(error.message);
 }
 
-/**
- * Get the current Supabase session (null if not logged in)
- */
 export async function getSession() {
   const { data: { session } } = await supabase.auth.getSession();
   return session;
 }
 
-/**
- * Ensures a trader_users row exists for this auth user.
- * If an anonymous_id is passed (from localStorage), migrates
- * any trades saved anonymously to this real account.
- * Returns the AppUser.
- */
 export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | null> {
   const session = await getSession();
   if (!session?.user) return null;
 
-  const authUser = session.user;
-  const email    = authUser.email ?? "";
-  const name     = authUser.user_metadata?.full_name ?? email;
-  const avatar   = authUser.user_metadata?.avatar_url ?? null;
+  const authUser    = session.user;
+  const email       = authUser.email ?? "";
+  const name        = authUser.user_metadata?.full_name ?? email;
+  const avatar      = authUser.user_metadata?.avatar_url ?? null;
 
-  // Check if trader_users row already exists for this auth user
   const { data: existing } = await supabase
     .from("trader_users")
     .select("id, role, user_type, org_id")
@@ -70,7 +55,14 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
     .single();
 
   if (existing) {
+    // Keep display_name / avatar_url fresh on every login
+    await supabase
+      .from("trader_users")
+      .update({ display_name: name, avatar_url: avatar })
+      .eq("id", existing.id);
+
     if (anonymousId) await migrateAnonymousTrades(anonymousId, existing.id);
+
     return {
       id:        existing.id,
       authId:    authUser.id,
@@ -83,13 +75,15 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
     };
   }
 
-  // First login — create trader_users row (user_type null = needs onboarding)
+  // First login — create trader_users row
   const { data: created, error } = await supabase
     .from("trader_users")
     .insert({
       anonymous_id: authUser.id,
       auth_user_id: authUser.id,
-      user_type:    null,   // triggers onboarding
+      display_name: name,
+      avatar_url:   avatar,
+      user_type:    null,
     })
     .select("id, role, user_type, org_id")
     .single();
@@ -105,41 +99,23 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
     name,
     avatarUrl: avatar,
     role:      created.role as "user" | "admin",
-    userType:  null,   // will be set after onboarding
+    userType:  null,
     orgId:     null,
   };
 }
 
-/**
- * Migrates trades saved under anonymous_id to the real user's ID.
- * Called once on first login if localStorage has an anonymous_id.
- */
-async function migrateAnonymousTrades(
-  anonymousId: string,
-  realUserId:  string
-): Promise<void> {
-  // Find the anonymous trader_users row
+async function migrateAnonymousTrades(anonymousId: string, realUserId: string): Promise<void> {
   const { data: anonUser } = await supabase
     .from("trader_users")
     .select("id")
     .eq("anonymous_id", anonymousId)
-    .is("auth_user_id", null)  // only unlinked anonymous rows
+    .is("auth_user_id", null)
     .single();
 
-  if (!anonUser) return; // no anonymous trades to migrate
+  if (!anonUser) return;
 
-  // Re-assign all their trades to the real user
-  await supabase
-    .from("trades")
-    .update({ user_id: realUserId })
-    .eq("user_id", anonUser.id);
+  await supabase.from("trades").update({ user_id: realUserId }).eq("user_id", anonUser.id);
+  await supabase.from("trader_users").delete().eq("id", anonUser.id);
 
-  // Delete the now-empty anonymous user row
-  await supabase
-    .from("trader_users")
-    .delete()
-    .eq("id", anonUser.id);
-
-  // Clear localStorage so we don't try to migrate again
   try { localStorage.removeItem("trm_anonymous_id"); } catch {}
 }
