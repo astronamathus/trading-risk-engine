@@ -2,13 +2,13 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { supabase }        from "@/lib/supabase";
+import { supabase }               from "@/lib/supabase";
 import { ensureAuthUser, AppUser } from "@/lib/auth";
 
 interface AuthContextValue {
   user:    AppUser | null;
   loading: boolean;
-  refresh: () => Promise<void>; // re-fetch user (e.g. after onboarding)
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -19,10 +19,17 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
-// Pages that don't need auth or onboarding checks
-const PUBLIC_PATHS  = ["/auth", "/auth/callback"];
-const ONBOARD_PATH  = "/onboarding";
-const ORG_PATHS     = ["/org/setup", "/join"];
+const PUBLIC_PATHS = ["/auth", "/auth/callback"];
+const ONBOARD_PATH = "/onboarding";
+
+// Paths reachable during / immediately after onboarding
+// before userType is set — guard must not redirect these.
+const ONBOARDING_FLOW_PATHS = [
+  "/onboarding",
+  "/org/new",      // create org (was /org/setup — missing from original list)
+  "/org/setup",    // keep for backwards compat
+  "/join",         // invite acceptance
+];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user,    setUser]    = useState<AppUser | null>(null);
@@ -53,7 +60,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       async (event) => {
         if (event === "SIGNED_IN") {
           const appUser = await loadUser();
-          // After sign-in, redirect based on onboarding state
           if (appUser && appUser.userType === null) {
             router.push(ONBOARD_PATH);
           }
@@ -68,16 +74,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Guard: redirect to onboarding if user_type is not set
   useEffect(() => {
     if (loading) return;
-    if (!user) return;
+    if (!user)   return;
 
-    const isPublic   = PUBLIC_PATHS.some(p => pathname.startsWith(p));
-    const isOrgPath  = ORG_PATHS.some(p => pathname.startsWith(p));
-    const isOnboard  = pathname === ONBOARD_PATH;
+    const isPublic       = PUBLIC_PATHS.some(p => pathname.startsWith(p));
+    const isOnboardFlow  = ONBOARDING_FLOW_PATHS.some(p => pathname.startsWith(p));
 
-    if (isPublic || isOrgPath || isOnboard) return;
+    if (isPublic || isOnboardFlow) return;
 
     if (user.userType === null) {
       router.push(ONBOARD_PATH);
