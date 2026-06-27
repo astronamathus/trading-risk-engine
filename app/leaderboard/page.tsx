@@ -140,9 +140,7 @@ export default function LeaderboardPage() {
 
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-white">Leaderboard</h1>
-          <p className="text-sm text-slate-400">
-            {orgName} · {isAdmin ? "All metrics visible" : "Rank and trade count only"}
-          </p>
+          <p className="text-sm text-slate-400">{orgName}</p>
         </div>
 
         {error && (
@@ -164,13 +162,6 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* Privacy notice for members */}
-        {!isAdmin && (
-          <div className="rounded-xl border border-slate-700 bg-slate-800/30 px-4 py-3
-            text-xs text-slate-500">
-            Rankings are visible to all members. Detailed metrics are admin-only.
-          </div>
-        )}
 
         {/* Leaderboard table */}
         <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6">

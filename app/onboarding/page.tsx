@@ -9,8 +9,8 @@
 //   3. Org member → enter invite code → /join/[code]
 // ============================================================
 
-import { useState }    from "react";
-import { useRouter }   from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth }     from "@/components/AuthProvider";
 import { setIndieUser } from "@/lib/db/org";
 
@@ -44,8 +44,11 @@ function Card({
 export default function OnboardingPage() {
   const { user, refresh } = useAuth();
   const router            = useRouter();
+  const searchParams      = useSearchParams();
 
-  const [step,       setStep]       = useState<Step>("pick_type");
+  const [step,       setStep]       = useState<Step>(
+    (searchParams.get("step") as Step) ?? "pick_type"
+  );
   const [inviteCode, setInviteCode] = useState("");
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);

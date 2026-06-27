@@ -1,6 +1,5 @@
 // ============================================================
 // lib/db/org.ts
-// All database operations for organisations and invites.
 // ============================================================
 
 import { supabase } from "../supabase";
@@ -26,47 +25,39 @@ export interface OrgInvite {
 }
 
 export interface OrgMember {
-  id:         string;
-  email:      string;
-  name:       string;
-  avatar_url: string | null;
-  org_role:   "admin" | "member";
-  user_type:  string;
-  created_at: string;
+  id:           string;
+  display_name: string | null;
+  avatar_url:   string | null;
+  org_role:     "owner" | "admin" | "member";
+  joined_at:    string;
 }
 
-/**
- * Creates a new organisation and sets the current user as admin.
- */
-export async function createOrganisation(
-  name:      string,
-  userId:    string,
-  domain?:   string,
-): Promise<Organisation> {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// ── Org creation ─────────────────────────────────────────────
 
-  const { data: org, error: orgError } = await supabase
+export async function createOrganisation(
+  name:    string,
+  _userId: string,
+  domain?: string,
+): Promise<Organisation> {
+  const { data, error } = await supabase.rpc("create_org_with_owner", {
+    p_name:   name,
+    p_domain: domain ?? null,
+  });
+  if (error) throw new Error(`Failed to create org: ${error.message}`);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to create org");
+
+  const { data: org, error: fetchErr } = await supabase
     .from("organisations")
-    .insert({ name, slug: `${slug}-${Date.now()}`, domain: domain ?? null })
-    .select()
+    .select("*")
+    .eq("id", data.org_id)
     .single();
 
-  if (orgError || !org) throw new Error(`Failed to create org: ${orgError?.message}`);
-
-  // Set user as org admin
-  const { error: userError } = await supabase
-    .from("trader_users")
-    .update({ org_id: org.id, org_role: "admin", user_type: "org_admin" })
-    .eq("id", userId);
-
-  if (userError) throw new Error(`Failed to set admin: ${userError.message}`);
-
+  if (fetchErr || !org) throw new Error("Org created but could not fetch details");
   return org as Organisation;
 }
 
-/**
- * Sets user_type to 'indie' for a user who chose solo trading.
- */
+// ── Indie user ───────────────────────────────────────────────
+
 export async function setIndieUser(userId: string): Promise<void> {
   const { error } = await supabase
     .from("trader_users")
@@ -75,21 +66,19 @@ export async function setIndieUser(userId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/**
- * Generates an invite code for an organisation.
- * role: 'member' for traders, 'admin' for co-admins.
- * maxUses: null = unlimited, 1 = single use.
- * expiresInDays: how long the code is valid.
- */
+// ── Invites ──────────────────────────────────────────────────
+
 export async function createInvite(
-  orgId:          string,
-  createdBy:      string,
-  role:           "member" | "admin" = "member",
-  maxUses:        number | null = null,
-  expiresInDays:  number = 7,
+  orgId:         string,
+  createdBy:     string,
+  role:          "member" | "admin" = "member",
+  maxUses:       number | null = null,
+  expiresInDays: number = 7,
 ): Promise<OrgInvite> {
   const code      = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(
+    Date.now() + expiresInDays * 24 * 60 * 60 * 1000
+  ).toISOString();
 
   const { data, error } = await supabase
     .from("org_invites")
@@ -101,11 +90,9 @@ export async function createInvite(
   return data as OrgInvite;
 }
 
-/**
- * Looks up a valid invite by code.
- * Returns null if not found, expired, or over max uses.
- */
-export async function getInviteByCode(code: string): Promise<(OrgInvite & { org: Organisation }) | null> {
+export async function getInviteByCode(
+  code: string
+): Promise<(OrgInvite & { org: Organisation }) | null> {
   const { data, error } = await supabase
     .from("org_invites")
     .select("*, org:organisations(*)")
@@ -113,94 +100,71 @@ export async function getInviteByCode(code: string): Promise<(OrgInvite & { org:
     .single();
 
   if (error || !data) return null;
-
-  // Validate
   if (new Date(data.expires_at) < new Date()) return null;
   if (data.max_uses !== null && data.use_count >= data.max_uses) return null;
 
   return data as OrgInvite & { org: Organisation };
 }
 
-/**
- * Accepts an invite — joins the user to the org and increments use_count.
- */
-export async function acceptInvite(
-  code:   string,
-  userId: string,
-): Promise<void> {
-  const invite = await getInviteByCode(code);
-  if (!invite) throw new Error("Invite is invalid or has expired.");
-
-  const userType = invite.role === "admin" ? "org_admin" : "org_member";
-
-  const { error: userError } = await supabase
-    .from("trader_users")
-    .update({ org_id: invite.org_id, org_role: invite.role, user_type: userType })
-    .eq("id", userId);
-
-  if (userError) throw new Error(`Failed to join org: ${userError.message}`);
-
-  await supabase
-    .from("org_invites")
-    .update({ use_count: invite.use_count + 1 })
-    .eq("code", code);
+export async function acceptInvite(code: string, _userId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("validate_and_accept_invite", {
+    p_code: code,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to join organisation");
 }
 
-/**
- * Fetches all members of an organisation.
- */
+// ── Members ──────────────────────────────────────────────────
+
 export async function getOrgMembers(orgId: string): Promise<OrgMember[]> {
-  const { data, error } = await supabase
-    .from("trader_users")
-    .select("id, org_role, user_type, created_at, auth_user_id")
-    .eq("org_id", orgId)
-    .order("created_at", { ascending: true });
-
+  const { data, error } = await supabase.rpc("get_org_members_with_profiles", {
+    p_org_id: orgId,
+  });
   if (error) throw new Error(error.message);
-
-  // Enrich with auth user metadata
-  const members = await Promise.all((data ?? []).map(async m => {
-    const { data: authData } = await supabase.auth.admin?.getUserById?.(m.auth_user_id) ?? {};
-    return {
-      id:         m.id,
-      email:      authData?.user?.email ?? "—",
-      name:       authData?.user?.user_metadata?.full_name ?? "—",
-      avatar_url: authData?.user?.user_metadata?.avatar_url ?? null,
-      org_role:   m.org_role,
-      user_type:  m.user_type,
-      created_at: m.created_at,
-    };
-  }));
-
-  return members as OrgMember[];
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to fetch members");
+  return (data.members ?? []) as OrgMember[];
 }
 
-/**
- * Promotes a member to admin within an org.
- */
-export async function promoteMember(memberId: string): Promise<void> {
-  const { error } = await supabase
-    .from("trader_users")
-    .update({ org_role: "admin", user_type: "org_admin" })
-    .eq("id", memberId);
+export async function promoteMember(
+  memberId: string,
+  orgId:    string,
+  newRole:  "admin" | "member" = "admin",
+): Promise<void> {
+  const { data, error } = await supabase.rpc("promote_member", {
+    p_member_id: memberId,
+    p_org_id:    orgId,
+    p_new_role:  newRole,
+  });
   if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to promote member");
 }
 
-/**
- * Removes a member from an org (resets to indie).
- */
-export async function removeMember(memberId: string): Promise<void> {
-  const { error } = await supabase
-    .from("trader_users")
-    .update({ org_id: null, org_role: null, user_type: "indie" })
-    .eq("id", memberId);
+export async function removeMember(memberId: string, orgId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("remove_member", {
+    p_member_id: memberId,
+    p_org_id:    orgId,
+  });
   if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to remove member");
 }
 
-/**
- * Gets the organisation for the current user.
- */
+// ── Org lookup ───────────────────────────────────────────────
+
 export async function getUserOrg(userId: string): Promise<Organisation | null> {
+  // Try membership table first (source of truth after migration)
+  const { data: membership } = await supabase
+    .from("org_memberships")
+    .select("org_id, organisations(*)")
+    .eq("user_id", userId)
+    .order("joined_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (membership?.organisations) {
+    return membership.organisations as unknown as Organisation;
+  }
+
+  // Fallback: legacy org_id column
   const { data: user } = await supabase
     .from("trader_users")
     .select("org_id")
@@ -215,5 +179,21 @@ export async function getUserOrg(userId: string): Promise<Organisation | null> {
     .eq("id", user.org_id)
     .single();
 
-  return org as Organisation ?? null;
+  return (org as Organisation) ?? null;
+}
+
+// ── Admin trade actions ───────────────────────────────────────
+
+export async function adminSoftDeleteTrade(
+  tradeId: string,
+  orgId:   string,
+  reason:  string,
+): Promise<void> {
+  const { data, error } = await supabase.rpc("admin_soft_delete_trade", {
+    p_trade_id: tradeId,
+    p_org_id:   orgId,
+    p_reason:   reason,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to delete trade");
 }
