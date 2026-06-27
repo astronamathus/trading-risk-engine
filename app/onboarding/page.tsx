@@ -1,37 +1,20 @@
 "use client";
 
-// ============================================================
-// app/onboarding/page.tsx
-//
-// Three-tier onboarding:
-//   1. Indie  → setIndieUser → /dashboard
-//   2. Org admin → /org/new  (create org)
-//   3. Org member → enter invite code → /join/[code]
-// ============================================================
-
-import { useState, useEffect } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth }     from "@/components/AuthProvider";
+import { useAuth }      from "@/components/AuthProvider";
 import { setIndieUser } from "@/lib/db/org";
 
 type Step = "pick_type" | "indie_confirm" | "org_pick" | "org_join";
 
-function Card({
-  onClick, accent, icon, title, sub,
-}: {
-  onClick: () => void;
-  accent:  string;
-  icon:    React.ReactNode;
-  title:   string;
-  sub:     string;
+function Card({ onClick, accent, icon, title, sub }: {
+  onClick: () => void; accent: string;
+  icon: React.ReactNode; title: string; sub: string;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={`rounded-2xl border bg-slate-800/50 p-6 flex flex-col gap-4
-        text-left transition-all hover:bg-slate-800 focus:outline-none
-        focus:ring-2 ${accent}`}
-    >
+        text-left transition-all hover:bg-slate-800 focus:outline-none focus:ring-2 ${accent}`}>
       {icon}
       <div>
         <p className="font-semibold text-slate-200">{title}</p>
@@ -41,7 +24,8 @@ function Card({
   );
 }
 
-export default function OnboardingPage() {
+// Inner component that uses useSearchParams — must be inside Suspense
+function OnboardingInner() {
   const { user, refresh } = useAuth();
   const router            = useRouter();
   const searchParams      = useSearchParams();
@@ -72,7 +56,6 @@ export default function OnboardingPage() {
   function handleJoinWithCode() {
     const code = inviteCode.trim();
     if (!code) return;
-    // Accept full invite URL or bare code
     const match = code.match(/\/join\/([^/?#]+)/);
     router.push(`/join/${match ? match[1] : code}`);
   }
@@ -95,7 +78,6 @@ export default function OnboardingPage() {
             px-4 py-3 text-sm text-red-300">{error}</div>
         )}
 
-        {/* Step 1 — pick type */}
         {step === "pick_type" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card
@@ -103,8 +85,7 @@ export default function OnboardingPage() {
               accent="border-slate-700 hover:border-blue-500 focus:ring-blue-500"
               icon={
                 <svg className="w-8 h-8 text-blue-400" viewBox="0 0 32 32" fill="none"
-                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-                  strokeLinejoin="round">
+                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="16" cy="10" r="5"/>
                   <path d="M6 28c0-5.523 4.477-10 10-10s10 4.477 10 10"/>
                 </svg>
@@ -117,8 +98,7 @@ export default function OnboardingPage() {
               accent="border-slate-700 hover:border-emerald-500 focus:ring-emerald-500"
               icon={
                 <svg className="w-8 h-8 text-emerald-400" viewBox="0 0 32 32" fill="none"
-                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-                  strokeLinejoin="round">
+                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="10" cy="10" r="4"/>
                   <circle cx="22" cy="10" r="4"/>
                   <circle cx="16" cy="22" r="4"/>
@@ -131,10 +111,8 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 2a — indie confirm */}
         {step === "indie_confirm" && (
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50
-            p-6 flex flex-col gap-4">
+          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 flex flex-col gap-4">
             <p className="text-sm text-slate-300">
               You'll have full control of your trades and portfolio.
               No one else can see your data. You can join an organisation
@@ -148,65 +126,45 @@ export default function OnboardingPage() {
               </button>
               <button onClick={handleIndie} disabled={loading}
                 className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm
-                  font-semibold text-white hover:bg-blue-500 transition-colors
-                  disabled:opacity-50">
+                  font-semibold text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
                 {loading ? "Setting up…" : "Get started"}
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 2b — org: admin or member */}
         {step === "org_pick" && (
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50
-            p-6 flex flex-col gap-4">
+          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 flex flex-col gap-4">
             <p className="text-sm font-medium text-slate-400">
               Are you setting up a new desk, or joining an existing one?
             </p>
             <div className="flex flex-col gap-3">
-              <button
-                onClick={() => router.push("/org/new")}
+              <button onClick={() => router.push("/org/new")}
                 className="w-full rounded-xl border border-emerald-700 bg-emerald-900/20
                   px-4 py-4 text-left hover:bg-emerald-900/40 transition-colors
-                  focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <p className="text-sm font-semibold text-emerald-400">
-                  Create an organisation
-                </p>
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  I'm the admin / setting up a new trading desk
-                </p>
+                  focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <p className="text-sm font-semibold text-emerald-400">Create an organisation</p>
+                <p className="text-xs text-emerald-700 mt-0.5">I'm the admin / setting up a new trading desk</p>
               </button>
-              <button
-                onClick={() => setStep("org_join")}
+              <button onClick={() => setStep("org_join")}
                 className="w-full rounded-xl border border-slate-600 bg-slate-700/40
                   px-4 py-4 text-left hover:bg-slate-700 transition-colors
-                  focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <p className="text-sm font-semibold text-slate-300">
-                  Join with an invite
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  I have an invite link or code from my admin
-                </p>
+                  focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p className="text-sm font-semibold text-slate-300">Join with an invite</p>
+                <p className="text-xs text-slate-500 mt-0.5">I have an invite link or code from my admin</p>
               </button>
             </div>
             <button onClick={() => setStep("pick_type")}
-              className="text-xs text-slate-600 hover:text-slate-400
-                transition-colors text-center pt-1">
-              ← Back
+              className="text-xs text-slate-600 hover:text-slate-400 transition-colors text-center pt-1">
+              Back
             </button>
           </div>
         )}
 
-        {/* Step 2c — enter invite code */}
         {step === "org_join" && (
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50
-            p-6 flex flex-col gap-4">
+          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-slate-300">
-                Invite link or code
-              </label>
+              <label className="text-sm font-medium text-slate-300">Invite link or code</label>
               <input
                 type="text"
                 placeholder="https://… or paste your code"
@@ -218,9 +176,7 @@ export default function OnboardingPage() {
                   focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 autoFocus
               />
-              <p className="text-xs text-slate-600">
-                You can paste the full invite URL or just the code.
-              </p>
+              <p className="text-xs text-slate-600">You can paste the full invite URL or just the code.</p>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setStep("org_pick")}
@@ -230,8 +186,7 @@ export default function OnboardingPage() {
               </button>
               <button onClick={handleJoinWithCode} disabled={!inviteCode.trim()}
                 className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm
-                  font-semibold text-white hover:bg-blue-500 transition-colors
-                  disabled:opacity-50">
+                  font-semibold text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
                 Continue
               </button>
             </div>
@@ -240,5 +195,18 @@ export default function OnboardingPage() {
 
       </div>
     </main>
+  );
+}
+
+// Outer default export wraps with Suspense (required by Next.js for useSearchParams)
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"/>
+      </main>
+    }>
+      <OnboardingInner />
+    </Suspense>
   );
 }
