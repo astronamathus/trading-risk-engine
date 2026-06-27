@@ -1,5 +1,15 @@
 "use client";
 
+// ============================================================
+// app/join/[code]/page.tsx
+// Invite acceptance page.
+//
+// Changes vs original:
+//   - acceptInvite now calls the validate_and_accept_invite RPC
+//     which enforces expiry, max uses, and email domain server-side
+//   - refresh() called after joining so AppUser context updates
+// ============================================================
+
 import { useEffect, useState }  from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth }              from "@/components/AuthProvider";
@@ -10,7 +20,7 @@ type InviteWithOrg = OrgInvite & { org: Organisation };
 type PageState = "loading" | "found" | "invalid" | "joining" | "error";
 
 export default function JoinPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refresh } = useAuth();
   const router  = useRouter();
   const params  = useParams();
   const code    = params.code as string;
@@ -19,7 +29,6 @@ export default function JoinPage() {
   const [invite, setInvite] = useState<InviteWithOrg | null>(null);
   const [error,  setError]  = useState<string | null>(null);
 
-  // Load the invite
   useEffect(() => {
     if (authLoading) return;
     async function loadInvite() {
@@ -36,6 +45,7 @@ export default function JoinPage() {
     setState("joining");
     try {
       await acceptInvite(code, user.id);
+      await refresh();                   // update AppUser context with new userType/orgId
       router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to join.");
@@ -43,7 +53,6 @@ export default function JoinPage() {
     }
   }
 
-  // Not signed in — redirect to auth with return URL
   if (!authLoading && !user) {
     router.replace(`/auth?next=/join/${code}`);
     return null;
@@ -102,7 +111,6 @@ export default function JoinPage() {
         <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6
           flex flex-col gap-5 shadow-xl">
 
-          {/* Org details */}
           <div className="flex flex-col gap-1 border-b border-slate-700 pb-4">
             <span className="text-xs text-slate-500 uppercase tracking-wider">Organisation</span>
             <span className="text-lg font-semibold text-slate-200">{invite?.org.name}</span>
@@ -112,9 +120,13 @@ export default function JoinPage() {
                 Admin role
               </span>
             )}
+            {invite?.org.domain && (
+              <p className="text-xs text-slate-500 mt-1">
+                Requires an <span className="text-slate-400">@{invite.org.domain}</span> email
+              </p>
+            )}
           </div>
 
-          {/* Signed-in user */}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-slate-500 uppercase tracking-wider">Joining as</span>
             <div className="flex items-center gap-2">
@@ -131,7 +143,7 @@ export default function JoinPage() {
             </div>
           </div>
 
-          {error && (
+          {(state === "error" || error) && (
             <div className="rounded-xl border border-red-700 bg-red-900/30
               px-3 py-2 text-sm text-red-300">
               {error}
