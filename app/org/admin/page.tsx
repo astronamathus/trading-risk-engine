@@ -344,44 +344,39 @@ export default function AdminPage() {
       setOrgName(org.name);
       setOrgId(org.id);
 
-      // Role check via org_memberships
-      const { data: myMembership } = await supabase
-        .from("org_memberships")
-        .select("org_role")
-        .eq("user_id", user.id)
-        .eq("org_id", org.id)
-        .single();
-
-      if (!myMembership || !["owner","admin"].includes(myMembership.org_role)) {
+      // Role check from app context (no extra DB round-trip)
+      if (user.userType !== "org_admin") {
         router.replace("/dashboard");
         return;
       }
 
-      // Fetch all members + their profiles
+      // Fetch all members + profiles (RLS disabled on org_memberships)
       const { data: memberships, error: mErr } = await supabase
         .from("org_memberships")
         .select("user_id, org_role, trader_users(id, display_name, avatar_url)")
         .eq("org_id", org.id);
 
       if (mErr || !memberships) {
-        setError("Failed to load members.");
+        setError(`Failed to load members: ${mErr?.message}`);
         setLoading(false);
         return;
       }
 
-      // Fetch trades for each member
+      // Fetch trades for each member (RLS disabled on trades)
       const withTrades = await Promise.all(
         memberships.map(async (m) => {
           const tu = Array.isArray(m.trader_users)
             ? m.trader_users[0]
             : m.trader_users as { id: string; display_name: string | null; avatar_url: string | null } | null;
 
-          const { data: trades } = await supabase
+          const { data: trades, error: tErr } = await supabase
             .from("trades")
             .select("*")
             .eq("user_id", m.user_id)
             .is("deleted_at", null)
             .order("created_at", { ascending: false });
+
+          if (tErr) console.error("Trades fetch error:", tErr.message);
 
           return {
             id:           m.user_id,

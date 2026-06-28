@@ -197,3 +197,22 @@ export async function adminSoftDeleteTrade(
   if (error) throw new Error(error.message);
   if (!data?.ok) throw new Error(data?.error ?? "Failed to delete trade");
 }
+
+// ── Org management ────────────────────────────────────────────
+
+export async function renameOrganisation(orgId: string, newName: string): Promise<void> {
+  const { data, error } = await supabase.rpc("rename_organisation", {
+    p_org_id:    orgId,
+    p_new_name:  newName,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to rename organisation");
+}
+
+export async function deleteOrganisation(orgId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("delete_organisation", {
+    p_org_id: orgId,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to delete organisation");
+}
