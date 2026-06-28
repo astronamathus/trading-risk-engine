@@ -16,7 +16,7 @@ import { useRouter }   from "next/navigation";
 import { useAuth }     from "@/components/AuthProvider";
 import {
   getUserOrg, getOrgMembers, createInvite,
-  promoteMember, demoteMember, removeMember,
+  promoteMember, removeMember,
   renameOrganisation, deleteOrganisation,
 } from "@/lib/db/org";
 import type { Organisation, OrgMember } from "@/lib/db/org";
@@ -228,7 +228,7 @@ export default function OrgSettingsPage() {
   async function handleDemote(memberId: string) {
     if (!org) return;
     setActionId(memberId);
-    try { await demoteMember(memberId, org.id); await load(); }
+    try { await promoteMember(memberId, org.id, "member"); await load(); }
     catch (err) { setError(err instanceof Error ? err.message : "Failed to demote."); }
     finally { setActionId(null); }
   }
@@ -524,3 +524,4 @@ function MemberRow({ member, currentUserId, isLoading, onPromote, onDemote, onRe
       )}
     </div>
   );
+}
