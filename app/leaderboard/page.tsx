@@ -27,6 +27,7 @@ interface LeaderboardRow {
   avatar_url:      string | null;
   is_current_user: boolean;
   on_leaderboard:  boolean;
+  org_role:        "owner" | "admin" | "member";
   total_closed:    number;
   open_trades:     number;
   lifetime_pnl?:   number;
@@ -156,8 +157,9 @@ export default function LeaderboardPage() {
     </main>
   );
 
-  // Rows visible on the board (exclude current user if they opted out, unless admin)
-  const visibleRows = rows.filter(r => r.on_leaderboard || r.is_current_user);
+  // The RPC now returns on_leaderboard honestly per-row for every
+  // role (owner, admin, member) -- no special-casing needed here.
+  const visibleRows = rows.filter(r => r.on_leaderboard);
 
   return (
     <main className="px-4 py-10 sm:px-6 lg:px-8">
@@ -247,6 +249,15 @@ export default function LeaderboardPage() {
                         {row.is_current_user && (
                           <span className="text-xs text-slate-600">(you)</span>
                         )}
+                        {(row.org_role === "admin" || row.org_role === "owner") && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded border ${
+                            row.org_role === "owner"
+                              ? "border-purple-700 text-purple-400 bg-purple-900/20"
+                              : "border-amber-700 text-amber-400 bg-amber-900/20"
+                          }`}>
+                            {row.org_role === "owner" ? "Owner" : "Admin"}
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs text-slate-500">
                         {row.total_closed} closed · {row.open_trades} open
@@ -284,18 +295,18 @@ export default function LeaderboardPage() {
           )}
         </section>
 
-        {/* Current user's ghost row if opted out */}
-        {!iAmOnLb && (() => {
+        {/* Current user's ghost row if not actually visible on the board */}
+        {!visibleRows.some(r => r.is_current_user) && (() => {
           const me = rows.find(r => r.is_current_user);
           if (!me) return null;
           return (
             <div className="rounded-xl border border-dashed border-slate-700
               bg-slate-800/20 px-4 py-3 text-xs text-slate-500 text-center">
-              You are not on the leaderboard. Click "Join leaderboard" to appear.
+              You are not on the leaderboard. Click &quot;Join leaderboard&quot; to appear.
               {isAdmin && me.lifetime_pnl !== undefined && (
                 <span className="ml-1">
-                  Your lifetime P&L: <span className={me.lifetime_pnl >= 0
-                    ? "text-emerald-400" : "text-red-400"}>
+                  Your lifetime P&amp;L:{" "}
+                  <span className={me.lifetime_pnl >= 0 ? "text-emerald-400" : "text-red-400"}>
                     {formatINR(me.lifetime_pnl)}
                   </span>
                 </span>
