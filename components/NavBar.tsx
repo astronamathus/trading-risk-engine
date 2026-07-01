@@ -1,5 +1,17 @@
 "use client";
 
+// ============================================================
+// components/NavBar.tsx
+//
+// Changes vs original:
+//   - Org admins see "Org" nav section with Settings,
+//     Leaderboard, and Admin links
+//   - Profile dropdown shows org role badge
+//   - "Join an organisation" option above Sign out for
+//     non-admin org members and indie users
+// ============================================================
+
+
 import Link                      from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth }                from "@/components/AuthProvider";
