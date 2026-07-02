@@ -6,7 +6,7 @@
 
 import { useMemo } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
+  AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { Trade } from "@/lib/db/trades";
@@ -15,6 +15,8 @@ interface EquityCurveProps {
   trades:     Trade[];
   livePrices: Record<string, number>;
 }
+
+const CLOSED_STATUSES = ["CLOSED", "STOPPED", "TARGET_HIT"] as const;
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -29,121 +31,161 @@ function formatDate(dateStr: string) {
 }
 
 export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
-  // ── Series A: Closed Out (realised cumulative P&L) ───────
-  const closedSeries = useMemo(() => {
+
+  // Combined equity curve: each closed trade adds its P&L cumulatively
+  // sorted by created_at, representing portfolio equity over time
+  const equitySeries = useMemo(() => {
     const closed = trades
-      .filter(t => (t.status === "CLOSED" || t.status === "STOPPED") && t.realised_pnl !== null)
+      .filter(t => (CLOSED_STATUSES as readonly string[]).includes(t.status) && t.realised_pnl !== null)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     let cum = 0;
-    return closed.map(t => {
+    const points = closed.map(t => {
       cum += t.realised_pnl ?? 0;
-      return { date: formatDate(t.created_at), pnl: Math.round(cum), ticker: t.ticker };
+      return {
+        date:   formatDate(t.created_at),
+        equity: Math.round(cum),
+        ticker: t.ticker,
+        pnl:    t.realised_pnl ?? 0,
+        status: t.status,
+      };
     });
-  }, [trades]);
 
-  // ── Series B: Mark to Market (unrealised cumulative by entry date) ─
-  const mtmSeries = useMemo(() => {
-    const open = trades
+    // Add current MTM point if there are open trades
+    const openPnl = trades
       .filter(t => t.status === "OPEN")
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      .reduce((s, t) => {
+        const ltp = livePrices[t.ticker];
+        return s + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0);
+      }, 0);
 
-    let cum = 0;
-    return open.map(t => {
-      const ltp  = livePrices[t.ticker];
-      const pnl  = ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0;
-      cum += pnl;
-      return { date: formatDate(t.created_at), pnl: Math.round(cum), ticker: t.ticker };
-    });
+    if (openPnl !== 0 && points.length > 0) {
+      points.push({
+        date:   "Now",
+        equity: Math.round(cum + openPnl),
+        ticker: "",
+        pnl:    openPnl,
+        status: "OPEN" as Trade["status"],
+      });
+    }
+
+    return points;
   }, [trades, livePrices]);
 
-  // Merge both series by date for a unified x-axis
-  const allDates = [...new Set([
-    ...closedSeries.map(d => d.date),
-    ...mtmSeries.map(d => d.date),
-  ])];
+  // Monthly P&L breakdown for bar reference
+  const monthlyBars = useMemo(() => {
+    const map: Record<string, number> = {};
+    trades
+      .filter(t => (CLOSED_STATUSES as readonly string[]).includes(t.status))
+      .forEach(t => {
+        const key = new Date(t.created_at).toLocaleDateString("en-IN", {
+          month: "short", year: "2-digit",
+        });
+        map[key] = (map[key] ?? 0) + (t.realised_pnl ?? 0);
+      });
+    return Object.entries(map).map(([month, pnl]) => ({ month, pnl: Math.round(pnl) }));
+  }, [trades]);
 
-  const merged = allDates.map(date => {
-    const c = closedSeries.find(d => d.date === date);
-    const m = mtmSeries.find(d => d.date === date);
-    return { date, closed: c?.pnl, mtm: m?.pnl };
-  });
-
-  const isEmpty = closedSeries.length === 0 && mtmSeries.length === 0;
+  const isEmpty = equitySeries.length === 0;
+  const finalEquity = equitySeries[equitySeries.length - 1]?.equity ?? 0;
+  const isPositive  = finalEquity >= 0;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
+    const d = payload[0];
     return (
       <div className="rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-xs shadow-xl">
         <p className="text-slate-400 mb-1">{label}</p>
-        {payload.map((p: any) => (
-          <p key={p.name} style={{ color: p.color }} className="font-medium">
-            {p.name}: {formatINR(p.value)}
+        <p className="font-semibold" style={{ color: d.value >= 0 ? "#10b981" : "#f87171" }}>
+          Portfolio: {formatINR(d.value)}
+        </p>
+        {payload[1] && (
+          <p className="text-slate-400 mt-0.5">
+            Trade: {payload[1].value >= 0 ? "+" : ""}{formatINR(payload[1].value)}
           </p>
-        ))}
+        )}
       </div>
     );
   };
 
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-200">Equity Curve</h3>
+    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 flex flex-col gap-5">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-semibold text-slate-200">Portfolio Equity Curve</h3>
         <div className="flex items-center gap-4 text-xs text-slate-500">
+          {!isEmpty && (
+            <span className={`font-semibold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+              {isPositive ? "+" : ""}{formatINR(finalEquity)} total
+            </span>
+          )}
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-0.5 bg-emerald-500 inline-block rounded"/>
-            Mark to Market
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-blue-400 inline-block rounded"/>
-            Closed Out
+            Cumulative P&L
           </span>
         </div>
       </div>
 
       {isEmpty ? (
-        <div className="flex items-center justify-center h-40 text-slate-600 text-sm">
-          No trade data yet — close some trades to see your equity curve.
+        <div className="flex items-center justify-center h-48 text-slate-600 text-sm">
+          Close some trades to see your equity curve.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={merged} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={equitySeries} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={isPositive ? "#10b981" : "#f87171"} stopOpacity={0.15}/>
+                <stop offset="95%" stopColor={isPositive ? "#10b981" : "#f87171"} stopOpacity={0}/>
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
             <XAxis
               dataKey="date"
               tick={{ fill: "#475569", fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
+              axisLine={false} tickLine={false}
             />
             <YAxis
               tick={{ fill: "#475569", fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
+              axisLine={false} tickLine={false}
               tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`}
-              width={48}
+              width={52}
             />
             <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 2"/>
             <Tooltip content={<CustomTooltip/>}/>
-            <Line
+            <Area
               type="monotone"
-              dataKey="mtm"
-              name="Mark to Market"
-              stroke="#10b981"
+              dataKey="equity"
+              name="Portfolio"
+              stroke={isPositive ? "#10b981" : "#f87171"}
               strokeWidth={2}
-              dot={false}
+              fill="url(#equityGrad)"
+              dot={{ fill: isPositive ? "#10b981" : "#f87171", r: 3, strokeWidth: 0 }}
               connectNulls
             />
-            <Line
-              type="monotone"
-              dataKey="closed"
-              name="Closed Out"
-              stroke="#60a5fa"
-              strokeWidth={2}
-              dot={{ fill: "#60a5fa", r: 3 }}
-              connectNulls
-            />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
+      )}
+
+      {/* Monthly P&L summary row */}
+      {monthlyBars.length > 0 && (
+        <div className="border-t border-slate-700 pt-4">
+          <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Monthly P&L</p>
+          <div className="flex gap-2 flex-wrap">
+            {monthlyBars.map(({ month, pnl }) => (
+              <div key={month}
+                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg border text-xs
+                  ${pnl >= 0
+                    ? "border-emerald-800 bg-emerald-900/20 text-emerald-400"
+                    : "border-red-900 bg-red-900/20 text-red-400"
+                  }`}>
+                <span className="text-slate-500 text-xs">{month}</span>
+                <span className="font-semibold tabular-nums">
+                  {pnl >= 0 ? "+" : ""}{formatINR(pnl)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
