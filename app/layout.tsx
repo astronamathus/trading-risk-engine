@@ -1,4 +1,13 @@
-
+// ============================================================
+// app/layout.tsx
+//
+// Changes:
+//   - Inline blocking <script> reads trm_theme from localStorage
+//     and sets class="dark" on <html> BEFORE React hydrates.
+//     This prevents the flash of wrong theme on first load.
+//   - ThemeProvider wraps the app so any component can call
+//     useTheme() to read or change the current theme.
+// ============================================================
 
 import type { Metadata } from "next";
 import { Manrope }       from "next/font/google";
