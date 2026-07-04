@@ -216,3 +216,25 @@ export async function deleteOrganisation(orgId: string): Promise<void> {
   if (error) throw new Error(error.message);
   if (!data?.ok) throw new Error(data?.error ?? "Failed to delete organisation");
 }
+
+export async function demoteMember(memberId: string, orgId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("promote_member", {
+    p_member_id: memberId,
+    p_org_id:    orgId,
+    p_new_role:  "member",
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to demote member");
+}
+
+export async function toggleLeaderboardVisibility(
+  orgId: string,
+  show:  boolean,
+): Promise<void> {
+  const { data, error } = await supabase.rpc("toggle_leaderboard_visibility", {
+    p_org_id: orgId,
+    p_show:   show,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to update leaderboard visibility");
+}
