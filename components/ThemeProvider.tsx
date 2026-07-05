@@ -1,5 +1,15 @@
 "use client";
 
+// ============================================================
+// components/ThemeProvider.tsx
+//
+// Manages theme: "light" | "dark" | "system"
+// - Persists choice to localStorage under "trm_theme"
+// - "system" follows the OS prefers-color-scheme media query
+// - Applies/removes "dark" class on <html> element
+// - Exposes useTheme() hook to any component
+// ============================================================
+
 import {
   createContext, useContext, useEffect, useState, useCallback,
 } from "react";
