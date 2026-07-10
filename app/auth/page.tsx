@@ -27,16 +27,16 @@ export default function AuthPage() {
 
         {/* Header */}
         <div className="text-center flex flex-col gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Trade Risk Manager
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
             Sign in to track your trades and manage your portfolio.
           </p>
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-slate-700 bg-slate-800/50
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50
           backdrop-blur p-6 flex flex-col gap-4 shadow-xl">
 
           {error && (
@@ -50,8 +50,8 @@ export default function AuthPage() {
             onClick={handleGoogle}
             disabled={loading}
             className="w-full flex items-center justify-center gap-3 rounded-xl
-              border border-slate-600 bg-slate-700/60 px-4 py-3 text-sm
-              font-medium text-slate-200 transition-all hover:bg-slate-700
+              border border-slate-300 dark:border-slate-600 bg-slate-100/60 dark:bg-slate-200 dark:bg-slate-700/60 px-4 py-3 text-sm
+              font-medium text-slate-800 dark:text-slate-200 transition-all hover:bg-slate-200 dark:bg-slate-700
               hover:border-slate-500 disabled:opacity-50 disabled:cursor-not-allowed
               focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
@@ -73,7 +73,7 @@ export default function AuthPage() {
             {loading ? "Signing in…" : "Continue with Google"}
           </button>
 
-          <p className="text-xs text-slate-600 text-center">
+          <p className="text-xs text-slate-400 dark:text-slate-600 text-center">
             Your trades are private and only visible to you.
           </p>
         </div>
