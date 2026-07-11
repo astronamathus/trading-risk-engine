@@ -45,22 +45,22 @@ export default function RiskPieChart({ trades }: RiskPieChartProps) {
     const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
     const idx = data.findIndex(x => x.name === d.name) % SLICE_COLOURS.length;
     return (
-      <div className="rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-xs shadow-xl">
+      <div className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-xs shadow-xl">
         <p style={{ color: SLICE_COLOURS[idx].stroke }} className="font-medium">{d.name}</p>
-        <p className="text-slate-400">{formatINR(d.value)} at risk · {pct}%</p>
+        <p className="text-slate-400 dark:text-slate-500 dark:text-slate-400">{formatINR(d.value)} at risk · {pct}%</p>
       </div>
     );
   };
 
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-200">Risk Allocation</h3>
-        <span className="text-xs text-slate-500">by risk amount</span>
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Risk Allocation</h3>
+        <span className="text-xs text-slate-400 dark:text-slate-500">by risk amount</span>
       </div>
 
       {data.length === 0 ? (
-        <div className="flex items-center justify-center h-40 text-slate-600 text-sm">
+        <div className="flex items-center justify-center h-40 text-slate-400 dark:text-slate-600 text-sm">
           No open positions with risk data.
         </div>
       ) : (
@@ -99,11 +99,11 @@ export default function RiskPieChart({ trades }: RiskPieChartProps) {
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0 border"
                       style={{ backgroundColor: c.fill, borderColor: c.stroke }}/>
-                    <span className="text-slate-300 font-mono truncate">{d.name}</span>
+                    <span className="text-slate-700 dark:text-slate-300 font-mono truncate">{d.name}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-slate-600 tabular-nums">{formatINR(d.value)}</span>
-                    <span className="text-slate-500 tabular-nums w-8 text-right">{pct}%</span>
+                    <span className="text-slate-400 dark:text-slate-600 tabular-nums">{formatINR(d.value)}</span>
+                    <span className="text-slate-400 dark:text-slate-500 tabular-nums w-8 text-right">{pct}%</span>
                   </div>
                 </div>
               );
@@ -113,7 +113,7 @@ export default function RiskPieChart({ trades }: RiskPieChartProps) {
       )}
 
       {data.length > 0 && (
-        <div className="border-t border-slate-700 pt-3 text-xs text-slate-500 flex justify-between">
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-3 text-xs text-slate-400 dark:text-slate-500 flex justify-between">
           <span>Total at risk</span>
           <span className="text-amber-400 font-medium tabular-nums">{formatINR(total)}</span>
         </div>
