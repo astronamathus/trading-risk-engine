@@ -48,9 +48,9 @@ function formatINR(v: number) {
 
 function Medal({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-amber-400 text-sm">🥇</span>;
-  if (rank === 2) return <span className="text-slate-300 text-sm">🥈</span>;
+  if (rank === 2) return <span className="text-slate-700 dark:text-slate-300 text-sm">🥈</span>;
   if (rank === 3) return <span className="text-amber-700 text-sm">🥉</span>;
-  return <span className="text-slate-600 text-xs w-4 text-center">{rank}</span>;
+  return <span className="text-slate-400 dark:text-slate-600 text-xs w-4 text-center">{rank}</span>;
 }
 
 function SortButton({ label, metric, current, onChange }: {
@@ -61,8 +61,8 @@ function SortButton({ label, metric, current, onChange }: {
     <button onClick={() => onChange(metric)}
       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
         current === metric
-          ? "bg-blue-600 text-white"
-          : "border border-slate-600 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+          ? "bg-blue-600 text-slate-900 dark:text-white"
+          : "border border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700"
       }`}>
       {label}
     </button>
@@ -74,7 +74,7 @@ function StatCell({ label, value, positive }: {
 }) {
   return (
     <div className="flex flex-col items-end gap-0.5">
-      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-xs text-slate-400 dark:text-slate-500">{label}</span>
       <span className={`text-sm font-semibold tabular-nums ${positive ? "text-emerald-400" : "text-red-400"}`}>
         {value}
       </span>
@@ -185,7 +185,7 @@ export default function LeaderboardPage() {
   }
 
   if (authLoading || (loading && !noGroup && rows.length === 0)) return (
-    <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-500">
+    <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-400 dark:text-slate-500">
       <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -205,8 +205,8 @@ export default function LeaderboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Leaderboard</h1>
-            <p className="text-sm text-slate-400">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Leaderboard</h1>
+            <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
               {orgName}{selectedGroupName ? ` · ${selectedGroupName}` : ""}
             </p>
           </div>
@@ -217,7 +217,7 @@ export default function LeaderboardPage() {
               font-medium transition-colors disabled:opacity-50 ${
               iAmOnLb
                 ? "border-emerald-700 text-emerald-400 bg-emerald-900/20 hover:bg-emerald-900/40"
-                : "border-slate-600 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+                : "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700"
             }`}>
             {iAmOnLb ? "✓ On leaderboard" : "+ Join leaderboard"}
           </button>
@@ -230,16 +230,16 @@ export default function LeaderboardPage() {
 
         {/* No groups yet */}
         {noGroup && (
-          <div className="rounded-2xl border border-dashed border-slate-700 p-10 text-center
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-10 text-center
             flex flex-col gap-3">
-            <p className="text-slate-400 text-sm font-medium">No groups set up yet</p>
-            <p className="text-slate-600 text-xs">
+            <p className="text-slate-400 dark:text-slate-500 dark:text-slate-400 text-sm font-medium">No groups set up yet</p>
+            <p className="text-slate-400 dark:text-slate-600 text-xs">
               Leaderboards exist within groups. Ask your admin to create groups first.
             </p>
             {isAdmin && (
               <button onClick={() => router.push("/org/groups")}
                 className="mx-auto mt-2 px-4 py-2 rounded-xl bg-blue-600 text-sm
-                  font-semibold text-white hover:bg-blue-500 transition-colors">
+                  font-semibold text-slate-900 dark:text-white hover:bg-blue-500 transition-colors">
                 Create groups
               </button>
             )}
@@ -255,11 +255,11 @@ export default function LeaderboardPage() {
                   <button key={g.id} onClick={() => handleSelectGroup(g.id)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                       selectedGroup === g.id
-                        ? "bg-slate-700 text-slate-100"
-                        : "border border-slate-600 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+                        ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        : "border border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700"
                     }`}>
                     {g.name}
-                    <span className="ml-1.5 text-slate-500">{g.member_count}</span>
+                    <span className="ml-1.5 text-slate-400 dark:text-slate-500">{g.member_count}</span>
                   </button>
                 ))}
               </div>
@@ -267,8 +267,8 @@ export default function LeaderboardPage() {
 
             {/* Non-admin with no group */}
             {!isAdmin && !myGroup && (
-              <div className="rounded-xl border border-slate-700 bg-slate-800/30 px-4 py-6
-                text-center text-sm text-slate-500">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/30 dark:bg-white dark:bg-slate-800/30 px-4 py-6
+                text-center text-sm text-slate-400 dark:text-slate-500">
                 You haven't been assigned to a group yet. Ask your admin.
               </div>
             )}
@@ -285,9 +285,9 @@ export default function LeaderboardPage() {
 
             {/* Board */}
             {(isAdmin || myGroup) && (
-              <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6">
+              <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-6">
                 {loading ? (
-                  <div className="flex items-center justify-center py-8 gap-2 text-slate-500 text-sm">
+                  <div className="flex items-center justify-center py-8 gap-2 text-slate-400 dark:text-slate-500 text-sm">
                     <svg className="animate-spin h-4 w-4 text-blue-400" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -295,7 +295,7 @@ export default function LeaderboardPage() {
                     Loading…
                   </div>
                 ) : visibleRows.length === 0 ? (
-                  <p className="text-sm text-slate-600 text-center py-8">
+                  <p className="text-sm text-slate-400 dark:text-slate-600 text-center py-8">
                     No traders on the board yet.
                   </p>
                 ) : (
@@ -307,7 +307,7 @@ export default function LeaderboardPage() {
                             ? "border border-blue-700 bg-blue-900/10"
                             : idx === 0
                               ? "border border-amber-800/50 bg-amber-900/10"
-                              : "hover:bg-slate-700/30"
+                              : "hover:bg-slate-100/30 dark:bg-slate-200 dark:bg-slate-700/30"
                         }`}>
 
                         <div className="w-6 flex items-center justify-center shrink-0">
@@ -316,24 +316,24 @@ export default function LeaderboardPage() {
 
                         {row.avatar_url ? (
                           <img src={row.avatar_url} alt={row.display_name ?? ""}
-                            className="w-8 h-8 rounded-full border border-slate-600 shrink-0"/>
+                            className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600 shrink-0"/>
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center
-                            justify-center text-sm font-bold text-slate-300 shrink-0">
+                            justify-center text-sm font-bold text-slate-700 dark:text-slate-300 shrink-0">
                             {(row.display_name ?? "?").charAt(0).toUpperCase()}
                           </div>
                         )}
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-200 truncate">
+                            <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                               {row.display_name ?? "Trader"}
                             </span>
                             {row.is_current_user && (
-                              <span className="text-xs text-slate-600">(you)</span>
+                              <span className="text-xs text-slate-400 dark:text-slate-600">(you)</span>
                             )}
                           </div>
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
                             {row.total_closed} closed · {row.open_trades} open
                           </span>
                         </div>
@@ -373,8 +373,8 @@ export default function LeaderboardPage() {
               const me = rows.find(r => r.is_current_user);
               if (!me) return null;
               return (
-                <div className="rounded-xl border border-dashed border-slate-700
-                  bg-slate-800/20 px-4 py-3 text-xs text-slate-500 text-center">
+                <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700
+                  bg-slate-100/20 dark:bg-white dark:bg-slate-800/20 px-4 py-3 text-xs text-slate-400 dark:text-slate-500 text-center">
                   You are not on the leaderboard. Click "Join leaderboard" to appear.
                   {isAdmin && me.lifetime_pnl !== undefined && (
                     <span className="ml-1">
@@ -392,7 +392,7 @@ export default function LeaderboardPage() {
             {isAdmin && (
               <div className="text-center">
                 <button onClick={() => router.push("/org/groups")}
-                  className="text-xs text-slate-600 hover:text-slate-400 transition-colors">
+                  className="text-xs text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-500 dark:text-slate-400 transition-colors">
                   Manage groups →
                 </button>
               </div>
