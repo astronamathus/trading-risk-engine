@@ -1,7 +1,6 @@
 // ============================================================
 // components/dashboard/EquityCurve.tsx — Equity Curve build
 // ============================================================
-
 "use client";
 
 import { useMemo } from "react";
@@ -94,13 +93,13 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
     if (!active || !payload?.length) return null;
     const d = payload[0];
     return (
-      <div className="rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-xs shadow-xl">
-        <p className="text-slate-400 mb-1">{label}</p>
+      <div className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-xs shadow-xl">
+        <p className="text-slate-400 dark:text-slate-500 dark:text-slate-400 mb-1">{label}</p>
         <p className="font-semibold" style={{ color: d.value >= 0 ? "#10b981" : "#f87171" }}>
           Portfolio: {formatINR(d.value)}
         </p>
         {payload[1] && (
-          <p className="text-slate-400 mt-0.5">
+          <p className="text-slate-400 dark:text-slate-500 dark:text-slate-400 mt-0.5">
             Trade: {payload[1].value >= 0 ? "+" : ""}{formatINR(payload[1].value)}
           </p>
         )}
@@ -109,10 +108,10 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 flex flex-col gap-5">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-sm font-semibold text-slate-200">Portfolio Equity Curve</h3>
-        <div className="flex items-center gap-4 text-xs text-slate-500">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Portfolio Equity Curve</h3>
+        <div className="flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500">
           {!isEmpty && (
             <span className={`font-semibold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
               {isPositive ? "+" : ""}{formatINR(finalEquity)} total
@@ -126,7 +125,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
       </div>
 
       {isEmpty ? (
-        <div className="flex items-center justify-center h-48 text-slate-600 text-sm">
+        <div className="flex items-center justify-center h-48 text-slate-400 dark:text-slate-600 text-sm">
           Close some trades to see your equity curve.
         </div>
       ) : (
@@ -168,8 +167,8 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
 
       {/* Monthly P&L summary row */}
       {monthlyBars.length > 0 && (
-        <div className="border-t border-slate-700 pt-4">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Monthly P&L</p>
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+          <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Monthly P&L</p>
           <div className="flex gap-2 flex-wrap">
             {monthlyBars.map(({ month, pnl }) => (
               <div key={month}
@@ -178,7 +177,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
                     ? "border-emerald-800 bg-emerald-900/20 text-emerald-400"
                     : "border-red-900 bg-red-900/20 text-red-400"
                   }`}>
-                <span className="text-slate-500 text-xs">{month}</span>
+                <span className="text-slate-400 dark:text-slate-500 text-xs">{month}</span>
                 <span className="font-semibold tabular-nums">
                   {pnl >= 0 ? "+" : ""}{formatINR(pnl)}
                 </span>
