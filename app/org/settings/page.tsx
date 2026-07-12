@@ -50,7 +50,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_BADGE: Record<string, string> = {
   owner:  "border-purple-700 text-purple-400 bg-purple-900/20",
   admin:  "border-amber-700  text-amber-400  bg-amber-900/20",
-  member: "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-500 dark:text-slate-400  bg-slate-100/40 dark:bg-white dark:bg-slate-800/40",
+  member: "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-400  bg-slate-100/40 dark:bg-slate-800/40",
 };
 
 function DeleteOrgModal({ orgName, onConfirm, onCancel, loading }: {
@@ -64,7 +64,7 @@ function DeleteOrgModal({ orgName, onConfirm, onCancel, loading }: {
         bg-white dark:bg-slate-900 shadow-2xl p-6 flex flex-col gap-5">
         <div>
           <h2 className="text-base font-semibold text-red-400">Delete organisation</h2>
-          <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400 mt-2">
+          <p className="text-sm text-slate-400 dark:text-slate-400 mt-2">
             This will permanently delete{" "}
             <span className="font-semibold text-slate-800 dark:text-slate-200">{orgName}</span>.
             All members become indie users. Trade history is preserved. Irreversible.
@@ -83,7 +83,7 @@ function DeleteOrgModal({ orgName, onConfirm, onCancel, loading }: {
         <div className="flex gap-3">
           <button onClick={onCancel} disabled={loading}
             className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2.5
-              text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:bg-white dark:bg-slate-800 transition-colors">
+              text-sm text-slate-400 dark:text-slate-400 hover:bg-white dark:bg-slate-800 transition-colors">
             Cancel
           </button>
           <button onClick={onConfirm} disabled={typed !== orgName || loading}
@@ -321,7 +321,7 @@ export default function OrgSettingsPage() {
           )}
 
           {/* ── Invite generation — all admins ─────────────── */}
-          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-6
+          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
             flex flex-col gap-5">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Generate Invite Link</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -366,7 +366,7 @@ export default function OrgSettingsPage() {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-600
                   bg-white dark:bg-slate-900 px-3 py-2">
-                  <span className="text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400 font-mono flex-1 truncate">
+                  <span className="text-xs text-slate-400 dark:text-slate-400 font-mono flex-1 truncate">
                     {window.location.origin}/join/{generatedCode}
                   </span>
                   <button onClick={copyInviteLink}
@@ -384,7 +384,7 @@ export default function OrgSettingsPage() {
           </section>
 
           {/* ── Members ─────────────────────────────────────── */}
-          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-6
+          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
             flex flex-col gap-5">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Members</h2>
@@ -474,7 +474,7 @@ function MemberRow({ member, currentUserId, isLoading, onPromote, onDemote, onRe
     <div className={`flex items-center justify-between py-2.5 px-3 rounded-xl
       transition-colors ${isLoading
         ? "opacity-40 pointer-events-none"
-        : "hover:bg-slate-100/30 dark:bg-slate-200 dark:bg-slate-700/30"}`}>
+        : "hover:bg-slate-100/30 dark:bg-slate-700/30"}`}>
       <div className="flex items-center gap-3">
         {member.avatar_url ? (
           <img src={member.avatar_url} alt={member.display_name ?? ""}
@@ -508,14 +508,14 @@ function MemberRow({ member, currentUserId, isLoading, onPromote, onDemote, onRe
           {onDemote && (
             <button onClick={onDemote}
               className="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600
-                text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+                text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
               Remove admin
             </button>
           )}
           {onRemove && (
             <button onClick={onRemove}
               className="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600
-                text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-red-400 hover:border-red-800
+                text-slate-400 dark:text-slate-400 hover:text-red-400 hover:border-red-800
                 hover:bg-red-900/20 transition-colors">
               Remove
             </button>

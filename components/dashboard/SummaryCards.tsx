@@ -15,15 +15,15 @@ function formatINR(v: number) {
   }).format(v);
 }
 
-function Card({ label, value, sub, sub2, valueColour = "text-slate-100" }: {
+function Card({ label, value, sub, sub2, valueColour = "text-slate-900 dark:text-slate-100" }: {
   label: string; value: string; sub?: string; sub2?: string; valueColour?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</span>
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-4 flex flex-col gap-1">
+      <span className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</span>
       <span className={`text-xl font-bold tabular-nums ${valueColour}`}>{value}</span>
-      {sub  && <span className="text-xs text-slate-600">{sub}</span>}
-      {sub2 && <span className="text-xs text-slate-600">{sub2}</span>}
+      {sub  && <span className="text-xs text-slate-400 dark:text-slate-600">{sub}</span>}
+      {sub2 && <span className="text-xs text-slate-400 dark:text-slate-600">{sub2}</span>}
     </div>
   );
 }
@@ -90,7 +90,7 @@ export default function SummaryCards({ trades, livePrices }: SummaryCardsProps) 
         value={avgR !== null ? `${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)}R` : "—"}
         sub={rValues.length > 0 ? `across ${rValues.length} trades` : "No closed trades"}
         sub2={`Profit factor: ${profitFactor}`}
-        valueColour={avgR === null ? "text-slate-400" : avgR >= 0 ? "text-emerald-400" : "text-red-400"}
+        valueColour={avgR === null ? "text-slate-400 dark:text-slate-400" : avgR >= 0 ? "text-emerald-400" : "text-red-400"}
       />
 
       {/* Portfolio health */}

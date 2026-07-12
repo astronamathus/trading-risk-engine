@@ -34,7 +34,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 
 const STATUS_STYLE: Record<string, string> = {
   TARGET_HIT: "border-blue-700 text-blue-400 bg-blue-900/20",
-  CLOSED:     "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 dark:text-slate-400 bg-slate-100/40 dark:bg-white dark:bg-slate-800/40",
+  CLOSED:     "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-400 bg-slate-100/40 dark:bg-slate-800/40",
   STOPPED:    "border-red-800 text-red-400 bg-red-900/20",
 };
 const STATUS_LABEL: Record<string, string> = {
@@ -124,7 +124,7 @@ export default function RiskTable({ trades, livePrices }: RiskTableProps) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-4">
 
       {/* Header with tab toggle */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -180,7 +180,7 @@ export default function RiskTable({ trades, livePrices }: RiskTableProps) {
                   const pos    = currentR !== null && currentR >= 0;
                   const rColor = currentR === null ? "text-slate-400 dark:text-slate-600" : pos ? "text-emerald-400" : "text-red-400";
                   return (
-                    <tr key={trade.id} className="hover:bg-slate-100/30 dark:bg-white dark:bg-slate-800/30 transition-colors">
+                    <tr key={trade.id} className="hover:bg-slate-100/30 dark:bg-slate-800/30 transition-colors">
                       <td className="py-3 pr-4">
                         <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                           {trade.ticker.replace(/\.(NS|BO)$/, "")}
@@ -198,11 +198,11 @@ export default function RiskTable({ trades, livePrices }: RiskTableProps) {
                             style={{ width: `${Math.min(riskPct, 100)}%` }}/>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 tabular-nums text-slate-400 dark:text-slate-500 dark:text-slate-400">{riskPct.toFixed(1)}%</td>
+                      <td className="py-3 pr-4 tabular-nums text-slate-400 dark:text-slate-400">{riskPct.toFixed(1)}%</td>
                       <td className={`py-3 pr-4 tabular-nums font-medium ${rColor}`}>
                         {currentR !== null ? `${pos ? "+" : ""}${currentR.toFixed(2)}R` : "—"}
                       </td>
-                      <td className="py-3 tabular-nums text-slate-400 dark:text-slate-500 dark:text-slate-400">
+                      <td className="py-3 tabular-nums text-slate-400 dark:text-slate-400">
                         {daysHeld === 0 ? "Today" : `${daysHeld}d`}
                       </td>
                     </tr>
@@ -211,7 +211,7 @@ export default function RiskTable({ trades, livePrices }: RiskTableProps) {
               </tbody>
               <tfoot className="border-t border-slate-200 dark:border-slate-700">
                 <tr className="text-xs text-slate-400 dark:text-slate-500">
-                  <td className="pt-3 text-slate-400 dark:text-slate-500 dark:text-slate-400 font-medium">{openRows.length} positions</td>
+                  <td className="pt-3 text-slate-400 dark:text-slate-400 font-medium">{openRows.length} positions</td>
                   <td className="pt-3 tabular-nums text-amber-400 font-medium">{formatINR(totalRisk)}</td>
                   <td className="pt-3">100%</td>
                   <td className="pt-3 tabular-nums">
@@ -254,7 +254,7 @@ export default function RiskTable({ trades, livePrices }: RiskTableProps) {
                 {closedRows.map(({ trade, pnl, r }) => {
                   const pos = pnl >= 0;
                   return (
-                    <tr key={trade.id} className="hover:bg-slate-100/30 dark:bg-white dark:bg-slate-800/30 transition-colors">
+                    <tr key={trade.id} className="hover:bg-slate-100/30 dark:bg-slate-800/30 transition-colors">
                       <td className="py-3 pr-4">
                         <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                           {trade.ticker.replace(/\.(NS|BO)$/, "")}
@@ -285,7 +285,7 @@ export default function RiskTable({ trades, livePrices }: RiskTableProps) {
               </tbody>
               <tfoot className="border-t border-slate-200 dark:border-slate-700">
                 <tr className="text-xs text-slate-400 dark:text-slate-500">
-                  <td className="pt-3 text-slate-400 dark:text-slate-500 dark:text-slate-400 font-medium" colSpan={3}>
+                  <td className="pt-3 text-slate-400 dark:text-slate-400 font-medium" colSpan={3}>
                     {closedRows.length} trades · {closedRows.filter(r => r.pnl > 0).length}W {closedRows.filter(r => r.pnl < 0).length}L
                   </td>
                   <td className="pt-3 tabular-nums">

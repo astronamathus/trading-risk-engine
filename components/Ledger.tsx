@@ -22,7 +22,7 @@ function StatusBadge({ status }: { status: Trade["status"] }) {
   const styles: Record<Trade["status"], string> = {
     QUEUED:     "border-amber-700  text-amber-400  bg-amber-900/20",
     OPEN:       "border-emerald-700 text-emerald-400 bg-emerald-900/20",
-    CLOSED:     "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-500 dark:text-slate-400  bg-slate-100/40 dark:bg-white dark:bg-slate-800/40",
+    CLOSED:     "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-400  bg-slate-100/40 dark:bg-slate-800/40",
     STOPPED:    "border-red-800    text-red-400    bg-red-900/20",
     TARGET_HIT: "border-blue-600   text-blue-400   bg-blue-900/20",
   };
@@ -129,7 +129,7 @@ function DetailPanel({ trade, ltp, onAction }: {
     aboveEntry ? `${toPctTarget.toFixed(1)}% to Target` :
                  `${toPctSL.toFixed(1)}% to Stop Loss`;
   const progressColour =
-    atEntry    ? "text-slate-400 dark:text-slate-500 dark:text-slate-400" :
+    atEntry    ? "text-slate-400 dark:text-slate-400" :
     aboveEntry ? "text-emerald-400" : "text-red-400";
 
   const capital       = trade.capital ?? 100000;
@@ -148,7 +148,7 @@ function DetailPanel({ trade, ltp, onAction }: {
 
   return (
     <td colSpan={8} className="px-4 pb-4 pt-0">
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-white dark:bg-slate-900/60 p-4 flex flex-col gap-4 mt-1">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-4 flex flex-col gap-4 mt-1">
 
         <div className="grid grid-cols-5 gap-3 text-xs">
           {[
@@ -191,7 +191,7 @@ function DetailPanel({ trade, ltp, onAction }: {
         )}
 
         {trade.status !== "OPEN" && trade.realised_pnl !== null && (
-          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-white dark:bg-slate-800/60 px-4 py-3 text-xs">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-xs">
             <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">Realised PnL</span>
             <div className={`text-lg font-bold mt-0.5 tabular-nums ${
               trade.realised_pnl >= 0 ? "text-emerald-400" : "text-red-400"
@@ -242,7 +242,7 @@ function DetailPanel({ trade, ltp, onAction }: {
             </button>
             <button
               onClick={() => onAction("close")}
-              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100/40 dark:bg-slate-200 dark:bg-slate-700/40 px-3 py-1.5
+              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100/40 dark:bg-slate-700/40 px-3 py-1.5
                 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:bg-slate-700 transition-colors"
             >
               Close Trade
@@ -301,7 +301,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
       <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
         <p className="text-slate-400 dark:text-slate-500 text-sm">No trades saved yet.</p>
         <p className="text-slate-400 dark:text-slate-600 text-xs">
-          Calculate a position and click <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">Add to Ledger</span>.
+          Calculate a position and click <span className="text-slate-400 dark:text-slate-400">Add to Ledger</span>.
         </p>
       </div>
     );
@@ -320,7 +320,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
           </span>
           <div className="flex gap-2 shrink-0">
             <button onClick={() => setConfirm(null)}
-              className="px-3 py-1 rounded-lg text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-600
+              className="px-3 py-1 rounded-lg text-xs text-slate-400 dark:text-slate-400 border border-slate-300 dark:border-slate-600
                 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
               Cancel
             </button>
@@ -339,7 +339,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table className="w-full text-sm">
-          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-white dark:bg-slate-800/80">
+          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80">
             <tr className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">
               <th className="text-left px-4 py-3">Stock</th>
               <th className="text-right px-4 py-3">Qty</th>
@@ -355,13 +355,13 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                       className={`px-1.5 py-0.5 text-xs transition-colors ${
                         pnlMode === "value"
                           ? "bg-slate-600 text-slate-800 dark:text-slate-200"
-                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-500 dark:text-slate-400"
+                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-400"
                       }`}>₹</button>
                     <button onClick={() => setPnlMode("percent")}
                       className={`px-1.5 py-0.5 text-xs transition-colors ${
                         pnlMode === "percent"
                           ? "bg-slate-600 text-slate-800 dark:text-slate-200"
-                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-500 dark:text-slate-400"
+                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-400"
                       }`}>%</button>
                   </div>
                 </div>
@@ -396,7 +396,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   className={[
                     "transition-colors cursor-pointer",
                     busy     ? "opacity-40 pointer-events-none" : "",
-                    expanded ? "bg-slate-50 dark:bg-white dark:bg-slate-800/60" : "hover:bg-slate-100/30 dark:bg-white dark:bg-slate-800/30",
+                    expanded ? "bg-slate-50 dark:bg-slate-800/60" : "hover:bg-slate-100/30 dark:bg-slate-800/30",
                   ].join(" ")}
                 >
                   <td className="px-4 py-3">
@@ -420,14 +420,14 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
                     {trade.quantity.toLocaleString("en-IN")}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-500 dark:text-slate-400 tabular-nums">
+                  <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
                     {formatINR(trade.entry_price)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {trade.status === "QUEUED" ? (
                       ltp !== undefined ? (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400 text-xs">{formatINR(ltp)}</span>
+                          <span className="text-slate-400 dark:text-slate-400 text-xs">{formatINR(ltp)}</span>
                           <span className="text-amber-400 text-xs">
                             {((trade.entry_price - ltp) / ltp * 100).toFixed(2)}% away
                           </span>
@@ -446,7 +446,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
                     {value !== null ? formatINR(value) : <span className="text-slate-400 dark:text-slate-600">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-500 dark:text-slate-400 tabular-nums">
+                  <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
                     {trade.risk_amount ? formatINR(trade.risk_amount) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -460,7 +460,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                 </tr>,
 
                 expanded ? (
-                  <tr key={`${trade.id}-detail`} className="bg-slate-100/20 dark:bg-white dark:bg-slate-800/20">
+                  <tr key={`${trade.id}-detail`} className="bg-slate-100/20 dark:bg-slate-800/20">
                     <DetailPanel
                       trade={trade}
                       ltp={ltp}
@@ -485,8 +485,8 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
             }, 0);
             const pnlPositive = totalPnl >= 0;
             return (
-              <tfoot className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-white dark:bg-slate-800/60">
-                <tr className="text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400">
+              <tfoot className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+                <tr className="text-xs text-slate-400 dark:text-slate-400">
                   <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">
                     Portfolio
                     <div className="text-slate-400 dark:text-slate-600 font-normal">{openTrades.length} open positions</div>
@@ -497,7 +497,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200">
                     {formatINR(totalValue)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-400 dark:text-slate-500 dark:text-slate-400">
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-400 dark:text-slate-400">
                     {formatINR(totalRisk)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium">

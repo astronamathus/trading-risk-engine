@@ -41,7 +41,7 @@ function StatusBadge({ status }: { status: Trade["status"] }) {
   const map: Record<Trade["status"], [string, string]> = {
     QUEUED:     ["QUEUED",  "border-amber-700   text-amber-400   bg-amber-900/20"],
     OPEN:       ["OPEN",    "border-emerald-700 text-emerald-400 bg-emerald-900/20"],
-    CLOSED:     ["CLOSED",  "border-slate-300 dark:border-slate-600   text-slate-400 dark:text-slate-500 dark:text-slate-400   bg-slate-100/40 dark:bg-white dark:bg-slate-800/40"],
+    CLOSED:     ["CLOSED",  "border-slate-300 dark:border-slate-600   text-slate-400 dark:text-slate-400   bg-slate-100/40 dark:bg-slate-800/40"],
     STOPPED:    ["SL HIT",  "border-red-800     text-red-400     bg-red-900/20"],
     TARGET_HIT: ["TG HIT",  "border-blue-700    text-blue-400    bg-blue-900/20"],
   };
@@ -81,14 +81,14 @@ function DeleteModal({
         bg-white dark:bg-slate-900 shadow-2xl p-6 flex flex-col gap-5">
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">Delete trade</h2>
-          <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-400 dark:text-slate-400 mt-1">
             <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{trade.ticker}</span>
             {" "}will be soft-deleted and hidden from the trader's view.
             This action is audited.
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-slate-400 dark:text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          <label className="text-xs font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider">
             Reason <span className="text-red-400">*</span>
           </label>
           <textarea
@@ -105,7 +105,7 @@ function DeleteModal({
         <div className="flex gap-3">
           <button onClick={onCancel}
             className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2.5
-              text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:bg-white dark:bg-slate-800 transition-colors">
+              text-sm text-slate-400 dark:text-slate-400 hover:bg-white dark:bg-slate-800 transition-colors">
             Cancel
           </button>
           <button
@@ -134,7 +134,7 @@ function TradeRow({
 }) {
   return (
     <tr className={`border-t border-slate-200 dark:border-slate-800 transition-colors
-      hover:bg-slate-100/30 dark:bg-white dark:bg-slate-800/30 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
+      hover:bg-slate-100/30 dark:bg-slate-800/30 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
       <td className="px-4 py-3">
         <span className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-200">
           {trade.ticker}
@@ -148,7 +148,7 @@ function TradeRow({
       <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300 text-sm">
         {formatINR(trade.entry_price)}
       </td>
-      <td className="px-4 py-3 text-right tabular-nums text-slate-400 dark:text-slate-500 dark:text-slate-400 text-sm">
+      <td className="px-4 py-3 text-right tabular-nums text-slate-400 dark:text-slate-400 text-sm">
         {formatINR(trade.stop_loss)}
       </td>
       <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300 text-sm">
@@ -175,7 +175,7 @@ function TradeRow({
                 e.target.value = "";
               }}
               className="text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800
-                text-slate-400 dark:text-slate-500 dark:text-slate-400 px-2 py-1 focus:outline-none focus:ring-1
+                text-slate-400 dark:text-slate-400 px-2 py-1 focus:outline-none focus:ring-1
                 focus:ring-blue-500 cursor-pointer"
             >
               <option value="" disabled>Override</option>
@@ -229,15 +229,15 @@ function MemberCard({
   const roleBadge =
     member.org_role === "owner" ? "text-purple-400 border-purple-700 bg-purple-900/20" :
     member.org_role === "admin" ? "text-amber-400  border-amber-700  bg-amber-900/20"  :
-                                  "text-slate-400 dark:text-slate-500 dark:text-slate-400  border-slate-300 dark:border-slate-600  bg-slate-100/30 dark:bg-white dark:bg-slate-800/30";
+                                  "text-slate-400 dark:text-slate-400  border-slate-300 dark:border-slate-600  bg-slate-100/30 dark:bg-slate-800/30";
 
   return (
-    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 overflow-hidden">
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 overflow-hidden">
       {/* Header */}
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-5 py-4
-          hover:bg-slate-100/30 dark:bg-slate-200 dark:bg-slate-700/30 transition-colors text-left"
+          hover:bg-slate-100/30 dark:bg-slate-700/30 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
           <svg className={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform shrink-0
@@ -290,7 +290,7 @@ function MemberCard({
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-slate-100/80 dark:bg-white dark:bg-slate-800/80">
+              <thead className="bg-slate-100/80 dark:bg-slate-800/80">
                 <tr className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">
                   <th className="text-left  px-4 py-3">Ticker</th>
                   <th className="text-right px-4 py-3">Entry</th>
@@ -479,19 +479,19 @@ export default function AdminPage() {
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
                 Team Overview
               </h1>
-              <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-400 dark:text-slate-400 mt-0.5">
                 {orgName} · {members.length} trader{members.length !== 1 ? "s" : ""}
               </p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => router.push("/leaderboard")}
                 className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs
-                  text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+                  text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
                 Leaderboard
               </button>
               <button onClick={() => router.push("/org/settings")}
                 className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs
-                  text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+                  text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
                 Settings
               </button>
             </div>
@@ -510,7 +510,7 @@ export default function AdminPage() {
               { label: "Desk P&L",       value: formatINR(totalPnl),       colour: pnlColour(totalPnl) },
             ].map(({ label, value, colour }) => (
               <div key={label}
-                className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 px-5 py-4">
+                className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-5 py-4">
                 <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</p>
                 <p className={`text-xl font-bold tabular-nums mt-1 ${colour}`}>{value}</p>
               </div>
@@ -522,7 +522,7 @@ export default function AdminPage() {
             <div className="text-center py-16 text-slate-400 dark:text-slate-600 text-sm">
               No members yet. Generate an invite from{" "}
               <button onClick={() => router.push("/org/settings")}
-                className="text-slate-400 dark:text-slate-500 dark:text-slate-400 underline hover:text-slate-800 dark:text-slate-200">
+                className="text-slate-400 dark:text-slate-400 underline hover:text-slate-800 dark:text-slate-200">
                 Settings
               </button>.
             </div>

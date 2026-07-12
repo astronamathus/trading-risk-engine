@@ -226,11 +226,11 @@ export default function GroupsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Groups</h1>
-            <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400 mt-0.5">{orgName}</p>
+            <p className="text-sm text-slate-400 dark:text-slate-400 mt-0.5">{orgName}</p>
           </div>
           <button onClick={() => router.push("/org/settings")}
             className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs
-              text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+              text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
             Settings
           </button>
         </div>
@@ -241,7 +241,7 @@ export default function GroupsPage() {
         )}
 
         {/* Create group */}
-        <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-6
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
           flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Create Group</h2>
           <div className="flex gap-3">
@@ -274,7 +274,7 @@ export default function GroupsPage() {
 
               return (
                 <div key={group.id}
-                  className={`rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-6
+                  className={`rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
                     flex flex-col gap-4 ${isBusy ? "opacity-60 pointer-events-none" : ""}`}>
 
                   {/* Group header */}
@@ -354,7 +354,7 @@ export default function GroupsPage() {
                             onClick={() => handleSetMemberGroup(m.id, group.id)}
                             disabled={!!actionId}
                             className="flex items-center gap-1.5 px-2 py-1 rounded-lg border
-                              border-slate-300 dark:border-slate-600 text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200
+                              border-slate-300 dark:border-slate-600 text-xs text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200
                               hover:bg-slate-200 dark:bg-slate-700 transition-colors disabled:opacity-40"
                           >
                             {m.avatar_url ? (
@@ -388,9 +388,9 @@ export default function GroupsPage() {
         )}
 
         {unassigned.length > 0 && groups.length > 0 && (
-          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100/30 dark:bg-white dark:bg-slate-800/30 p-6
+          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100/30 dark:bg-slate-800/30 p-6
             flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-slate-400 dark:text-slate-500 dark:text-slate-400">
+            <h2 className="text-sm font-semibold text-slate-400 dark:text-slate-400">
               Unassigned ({unassigned.length})
             </h2>
             {unassigned.map(m => (
@@ -423,7 +423,7 @@ function MemberRow({
   const initials = (member.display_name ?? "?").charAt(0).toUpperCase();
   return (
     <div className={`flex items-center justify-between py-2 px-3 rounded-xl
-      hover:bg-slate-100/30 dark:bg-slate-200 dark:bg-slate-700/30 transition-colors ${busy ? "opacity-40 pointer-events-none" : ""}`}>
+      hover:bg-slate-100/30 dark:bg-slate-700/30 transition-colors ${busy ? "opacity-40 pointer-events-none" : ""}`}>
       <div className="flex items-center gap-3">
         {member.avatar_url ? (
           <img src={member.avatar_url} alt={member.display_name ?? ""}
@@ -447,7 +447,7 @@ function MemberRow({
       <select
         value={currentGroupId ?? "none"}
         onChange={e => onSetGroup(member.id, e.target.value === "none" ? null : e.target.value)}
-        className="text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 dark:text-slate-400
+        className="text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-400
           px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
       >
         <option value="none">No group</option>

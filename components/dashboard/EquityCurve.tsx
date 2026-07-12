@@ -1,6 +1,3 @@
-// ============================================================
-// components/dashboard/EquityCurve.tsx — Equity Curve build
-// ============================================================
 "use client";
 
 import { useMemo } from "react";
@@ -94,12 +91,12 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
     const d = payload[0];
     return (
       <div className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-xs shadow-xl">
-        <p className="text-slate-400 dark:text-slate-500 dark:text-slate-400 mb-1">{label}</p>
+        <p className="text-slate-400 dark:text-slate-400 mb-1">{label}</p>
         <p className="font-semibold" style={{ color: d.value >= 0 ? "#10b981" : "#f87171" }}>
           Portfolio: {formatINR(d.value)}
         </p>
         {payload[1] && (
-          <p className="text-slate-400 dark:text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-slate-400 dark:text-slate-400 mt-0.5">
             Trade: {payload[1].value >= 0 ? "+" : ""}{formatINR(payload[1].value)}
           </p>
         )}
@@ -108,7 +105,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-5">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Portfolio Equity Curve</h3>
         <div className="flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500">

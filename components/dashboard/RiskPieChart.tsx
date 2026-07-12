@@ -47,13 +47,13 @@ export default function RiskPieChart({ trades }: RiskPieChartProps) {
     return (
       <div className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-xs shadow-xl">
         <p style={{ color: SLICE_COLOURS[idx].stroke }} className="font-medium">{d.name}</p>
-        <p className="text-slate-400 dark:text-slate-500 dark:text-slate-400">{formatINR(d.value)} at risk · {pct}%</p>
+        <p className="text-slate-400 dark:text-slate-400">{formatINR(d.value)} at risk · {pct}%</p>
       </div>
     );
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Risk Allocation</h3>
         <span className="text-xs text-slate-400 dark:text-slate-500">by risk amount</span>

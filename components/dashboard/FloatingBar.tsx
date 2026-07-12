@@ -20,7 +20,7 @@ function Stat({
   colour?: string; border?: boolean;
 }) {
   return (
-    <div className={`flex flex-col gap-0.5 px-5 ${border ? "border-r border-slate-200/60 dark:border-slate-200 dark:border-slate-700/60" : ""} shrink-0 min-w-0`}>
+    <div className={`flex flex-col gap-0.5 px-5 ${border ? "border-r border-slate-200/60 dark:border-slate-700/60" : ""} shrink-0 min-w-0`}>
       <span className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap h-4 flex items-center">
         {label}
       </span>
@@ -85,7 +85,7 @@ export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
 
   return (
     <div className="sticky top-0 z-40 w-full">
-      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-200 dark:border-slate-700/80 bg-white/95 dark:bg-white dark:bg-slate-900/95 backdrop-blur-md
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md
         shadow-2xl shadow-black/40 py-3 flex items-center overflow-x-auto">
 
         <Stat

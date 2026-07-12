@@ -1,20 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { signInWithGoogle } from "@/lib/auth";
 
 export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
-  const router = useRouter();
 
   async function handleGoogle() {
     setLoading(true);
     setError(null);
     try {
       await signInWithGoogle();
-      // signInWithGoogle redirects — this line rarely runs
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed.");
       setLoading(false);
@@ -22,26 +19,26 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4">
+    <main className="min-h-screen flex items-center justify-center px-4
+      bg-slate-50 dark:bg-[#0d1117]">
       <div className="w-full max-w-sm flex flex-col gap-8">
 
-        {/* Header */}
         <div className="text-center flex flex-col gap-2">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Trade Risk Manager
           </h1>
-          <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Sign in to track your trades and manage your portfolio.
           </p>
         </div>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50
-          backdrop-blur p-6 flex flex-col gap-4 shadow-xl">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700
+          bg-white dark:bg-slate-800/50 backdrop-blur p-6 flex flex-col gap-4 shadow-xl">
 
           {error && (
-            <div className="rounded-xl border border-red-700 bg-red-900/30
-              px-4 py-3 text-sm text-red-300">
+            <div className="rounded-xl border border-red-300 dark:border-red-700
+              bg-red-50 dark:bg-red-900/30 px-4 py-3 text-sm
+              text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
@@ -50,9 +47,12 @@ export default function AuthPage() {
             onClick={handleGoogle}
             disabled={loading}
             className="w-full flex items-center justify-center gap-3 rounded-xl
-              border border-slate-300 dark:border-slate-600 bg-slate-100/60 dark:bg-slate-200 dark:bg-slate-700/60 px-4 py-3 text-sm
-              font-medium text-slate-800 dark:text-slate-200 transition-all hover:bg-slate-200 dark:bg-slate-700
-              hover:border-slate-500 disabled:opacity-50 disabled:cursor-not-allowed
+              border border-slate-300 dark:border-slate-600
+              bg-slate-50 dark:bg-slate-700/60 px-4 py-3 text-sm
+              font-medium text-slate-800 dark:text-slate-200
+              transition-all hover:bg-slate-100 dark:hover:bg-slate-700
+              hover:border-slate-400 dark:hover:border-slate-500
+              disabled:opacity-50 disabled:cursor-not-allowed
               focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {loading ? (
@@ -62,7 +62,6 @@ export default function AuthPage() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
               </svg>
             ) : (
-              /* Google SVG icon */
               <svg className="h-4 w-4" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -73,12 +72,12 @@ export default function AuthPage() {
             {loading ? "Signing in…" : "Continue with Google"}
           </button>
 
-          <p className="text-xs text-slate-400 dark:text-slate-600 text-center">
+          <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
             Your trades are private and only visible to you.
           </p>
         </div>
 
-        <p className="text-xs text-slate-700 text-center">
+        <p className="text-xs text-slate-400 dark:text-slate-600 text-center">
           For educational purposes only · Prices via Yahoo Finance
         </p>
       </div>

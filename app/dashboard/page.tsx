@@ -147,7 +147,7 @@ export default function DashboardPage() {
             onClick={() => refresh()}
             disabled={refreshing}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600
-              text-xs font-medium text-slate-400 dark:text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-white dark:bg-slate-800
+              text-xs font-medium text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-white dark:bg-slate-800
               transition-colors disabled:opacity-40"
           >
             <RefreshIcon spinning={refreshing}/>
