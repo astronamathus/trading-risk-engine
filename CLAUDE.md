@@ -1,59 +1,283 @@
-# Trading Risk Manager
 
-Web-based position sizing calculator for Indian equities (NSE/BSE).
+## Repository
+**GitHub:** `https://github.com/astronamathus/trading-risk-engine`
+**Deployment:** `https://trading-risk-engine.vercel.app`
+**Stack:** Next.js 16.2, React 19, TypeScript, Tailwind CSS v4, Supabase Auth + DB, Recharts, Vercel
 
-## Stack
+---
 
-* Next.js App Router + TypeScript
-* Tailwind CSS (dark theme)
-* Yahoo Finance via server-side proxy
-* Vercel deployment target
-* Supabase database
+## What the app does
+Trade Risk Manager is a position sizing calculator and trade journal for Indian equity markets (NSE/BSE). The core philosophy is risk-first trading: define your maximum acceptable loss before entry, and the tool calculates position size, capital required, and monitors trade lifecycle automatically.
 
-## Architecture
+Two user modes:
+- **Indie** — private solo portfolio, no org features
+- **Organisation** — trading desk with admin oversight, group leaderboards, member management
 
-* `page.tsx` = server shell only
-* `CalculatorClient.tsx` owns all app state
-* Pure business logic in `lib/calculations.ts`
-* API proxy at `/api/stock-price`
-* Trades stored and displayed in `/app/ledger/page.tsx`
+---
 
-## Core Flow
+## Database: Supabase
 
-1. User submits form
-2. Validate inputs
-3. Fetch live price from Yahoo Finance
-4. Run position sizing calculations
-5. Render results panel
-6. Add to Ledger
+### Tables
+| Table | Purpose |
+|---|---|
+| `trader_users` | One row per user. Fields: `id`, `auth_user_id`, `anonymous_id`, `display_name`, `avatar_url`, `user_type`, `org_id` (legacy), `org_role` (legacy) |
+| `trades` | Trade records. Soft-delete fields: `deleted_at`, `deleted_by`, `delete_reason` |
+| `organisations` | `id`, `name`, `slug`, `domain` |
+| `org_memberships` | Junction table (multi-org): `user_id`, `org_id`, `org_role` (`owner`/`admin`/`member`), `on_leaderboard` (bool), `joined_at` |
+| `org_invites` | Invite codes: `code`, `role`, `expires_at`, `max_uses`, `use_count` |
+| `org_groups` | Groups within orgs: `id`, `org_id`, `name`, `created_by` |
+| `org_group_members` | Junction: `group_id`, `user_id`, `org_id`. Unique `(user_id, org_id)` — one group per member per org |
+| `trade_audit_log` | Append-only log of all admin edits/deletes on trades |
 
-## Core Formulas
+### RLS Status
+| Table | RLS | Notes |
+|---|---|---|
+| `trader_users` | **DISABLED** | Infinite recursion on INSERT with policies. Re-enable after removing dummy accounts |
+| `trades` | **DISABLED** | Dummy accounts have no `auth_user_id`. Re-enable after removing dummy accounts |
+| `organisations` | **ENABLED** | `postgres_bypass` policy allows RPC inserts |
+| `org_memberships` | **ENABLED** | `postgres_bypass` policy allows RPC writes |
+| `org_invites` | **ENABLED** | Admins manage via RLS policy |
+| `org_groups` | No RLS | Mutations via RPCs |
+| `org_group_members` | No RLS | Mutations via RPCs |
+| `trade_audit_log` | **ENABLED** | |
 
-* Risk/share = Entry − Stop Loss
-* Max risk = Capital × Risk%
-* Position size = floor(Max risk / Risk per share)
-* Capital required = Shares × Entry
+**To re-enable after removing demo data:**
+```sql
+alter table trades       enable row level security;
+alter table trader_users enable row level security;
+```
 
-## Features
+### Helper functions
+```sql
+auth_trader_id()                    -- resolves auth.uid() → trader_users.id
+auth_org_roles                      -- security-definer view: caller's org memberships
+trader_users_admin_visible(uuid)    -- security-definer fn for admin member reads
+```
 
-* NSE/BSE autocomplete
-* Live LTP fetch
-* Risk-based sizing
-* Optional capital deployment limits
-* Auto vs Limit sizing modes
-* Mobile responsive layout
-* Persistent trade ledger
+### Security-definer RPCs (all owned by `postgres`)
+| RPC | Purpose |
+|---|---|
+| `create_org_with_owner(name, domain)` | Creates org + owner membership atomically |
+| `validate_and_accept_invite(code)` | Accepts invite — enforces expiry, max uses, domain |
+| `promote_member(member_id, org_id, new_role)` | Promotes/demotes, blocks self-promotion |
+| `remove_member(member_id, org_id)` | Removes from org, resets to indie if no orgs remain |
+| `update_own_trade(trade_id, qty, sl, target, notes)` | User edits allowed fields only, audited |
+| `admin_soft_delete_trade(trade_id, org_id, reason)` | Admin soft-deletes trade, audited |
+| `get_org_leaderboard(org_id, sort)` | Ranks only to members, full metrics to admins |
+| `get_group_leaderboard(group_id, sort)` | Same but scoped to a group |
+| `get_org_members_with_profiles(org_id)` | Members with display_name/avatar (no admin API) |
+| `get_org_groups(org_id)` | Groups visible to caller |
+| `create_group(org_id, name)` | Admin creates a group |
+| `rename_group(group_id, new_name)` | Admin renames a group |
+| `delete_group(group_id)` | Admin deletes group, cascades members |
+| `set_group_member(group_id, member_id)` | Adds/moves member to group (upsert) |
+| `remove_group_member(group_id, member_id)` | Removes member from group |
+| `toggle_leaderboard_visibility(org_id, show)` | User opts in/out of leaderboard |
+| `rename_organisation(org_id, new_name)` | Owner or admin renames org |
+| `delete_organisation(org_id)` | Owner only — resets all members to indie, cascades |
 
-## Conventions
+---
 
-* Strict TypeScript types
-* Lifted state pattern
-* API calls only through server routes
-* Whole shares only (no fractional sizing)
+## Migrations Applied (in order)
+1. `001_multi_org_hardening.sql` — schema, initial RLS, RPCs
+2. `002_fix_rls_recursion.sql` — first recursion fix (superseded by 003)
+3. `003_fix_recursion_final.sql` — final recursion fix, `auth_org_roles` view, `trader_users_admin_visible()`
+4. `004_reset_users_to_onboarding.sql` — wipes all users to `user_type = null`
+5. `005_fix_invites_rls.sql` — `alter table org_invites disable row level security` (later re-enabled)
+6. `006_org_delete_and_rename.sql` — `delete_organisation` and `rename_organisation` RPCs
+7. `007_leaderboard_optin.sql` — `on_leaderboard` column, `toggle_leaderboard_visibility` RPC
+8. `008_groups.sql` — `org_groups`, `org_group_members` tables + all group RPCs
 
-## Known Limitations
+---
 
-* Yahoo Finance is unofficial
-* Static stock list
-* No brokerage/tax calculations
-* No portfolio-level risk view
+## User Model
+
+### `AppUser` (lib/auth.ts)
+```typescript
+interface AppUser {
+  id:        string;   // trader_users.id
+  authId:    string;   // auth.users.id
+  email:     string;
+  name:      string;
+  avatarUrl: string | null;
+  role:      "user" | "admin";
+  userType:  "indie" | "org_member" | "org_admin" | null; // null = needs onboarding
+  orgId:     string | null;  // legacy column, kept for routing fallback
+}
+```
+
+### User tiers
+| `userType` | Access |
+|---|---|
+| `null` | Not yet onboarded → redirect to `/onboarding` |
+| `"indie"` | Own trades/dashboard only, no org features |
+| `"org_member"` | Own trades + group leaderboard (rank + trade counts only) |
+| `"org_admin"` | Everything + team view, admin trade actions, settings, groups |
+
+### Org roles (`org_memberships.org_role`)
+- `owner` — full control, rename/delete org, demote admins
+- `admin` — same as owner except rename/delete org
+- `member` — standard trader
+
+---
+
+## Auth Flow
+1. Google OAuth → Supabase → `/auth/callback`
+2. `ensureAuthUser()` in `lib/auth.ts` — creates/loads `trader_users` row, saves `display_name` and `avatar_url` on every login
+3. `AuthProvider` redirects `userType === null` → `/onboarding`
+4. Allowed paths during onboarding (no redirect): `/onboarding`, `/org/new`, `/org/setup`, `/join/*`
+
+### Anonymous usage
+- `lib/user.ts` stores UUID in `localStorage` under `trm_anonymous_id`
+- On first login, `migrateAnonymousTrades()` re-assigns trades to the real user
+- Anon `trader_users` row (no `auth_user_id`) is then deleted
+
+---
+
+## Onboarding Flow (`app/onboarding/page.tsx`)
+Multi-step, `useSearchParams` wrapped in `<Suspense>`:
+1. **Pick type** — "I trade solo" / "I'm part of a firm"
+2. Solo → confirm → `setIndieUser()` → `/dashboard`
+3. Firm → **Create org** → `/org/new` OR **Join** → enter invite code → `/join/[code]`
+- Nav "Join an organisation" routes to `/onboarding?step=org_pick`
+
+---
+
+## Key Pages
+
+| Route | Purpose | Auth required |
+|---|---|---|
+| `/` | Calculator | No (anonymous OK) |
+| `/dashboard` | Portfolio analytics | Yes |
+| `/ledger` | Trade ledger | Yes |
+| `/auth` | Google sign-in | No |
+| `/auth/callback` | OAuth callback | No |
+| `/onboarding` | First-login user type selection | Yes |
+| `/org/new` | Create organisation | Yes (unboarded) |
+| `/org/settings` | Invite generation, member management, danger zone | `org_admin` |
+| `/org/admin` | Team overview, per-member trade tables, soft-delete | `org_admin` |
+| `/org/groups` | Create/rename/delete groups, assign members | `org_admin` |
+| `/leaderboard` | Group-scoped leaderboard | Yes (org member) |
+| `/join/[code]` | Invite acceptance | Yes |
+
+**Note:** `app/join/[code]/page.tsx` must use square brackets for the dynamic route.
+
+---
+
+## Key Components
+
+| Component | Notes |
+|---|---|
+| `AuthProvider` | Loads user, redirects unboarded users, exposes `refresh()` |
+| `ThemeProvider` | `light`/`dark`/`system` — initialises from localStorage synchronously to prevent flash. Default: `system` |
+| `NavBar` | Theme picker in dropdown, org links for admins, "Join org" for non-admins |
+| `Ledger` | Full trade table — delete removed for regular users |
+| `CalculatorForm` | Ticker search, LTP fetch, entry/SL inputs |
+| `ResultsPanel` | Position size output with capital limit controls |
+| `FloatingBar` | Sticky dashboard stats: portfolio value, lifetime P&L, risk %, avg R |
+| `SummaryCards` | 4 cards: Total P&L, Win Rate, Avg R, Portfolio counts |
+| `EquityCurve` | Area chart cumulative realised P&L + monthly P&L chips |
+| `TradeHealth` | Toggle open health categories / closed trade history |
+| `RiskTable` | Toggle open risk table / closed history, both sortable |
+| `RiskPieChart` | Donut chart of open positions by risk amount |
+
+---
+
+## Theme System
+- **Tailwind v4** — no `tailwind.config.ts`. Dark mode via `@variant dark (&:where(.dark, .dark *))` in `globals.css`
+- Blocking `<script>` in `layout.tsx` reads `trm_theme` from localStorage before React hydrates
+- `ThemeProvider` initialises `useState` from `localStorage` synchronously (no flash)
+- Default for new users: `system` (follows OS `prefers-color-scheme`)
+- All components use `dark:` variants — e.g. `bg-white dark:bg-slate-800/50`
+
+---
+
+## lib/db Files
+
+### `lib/db/trades.ts` exports
+- `saveTrade`, `getTrades`, `closeTrade`, `activateTrade`, `updateTradeStatus`
+- `updateOwnTrade(tradeId, fields)` — calls `update_own_trade` RPC (allowed: qty, SL, target, notes)
+- `deleteTrade` **REMOVED** — hard deletes blocked by RLS. Use `adminSoftDeleteTrade` from org.ts
+
+### `lib/db/org.ts` exports
+- `createOrganisation`, `setIndieUser`, `createInvite`, `getInviteByCode`, `acceptInvite`
+- `getOrgMembers`, `promoteMember`, `demoteMember`, `removeMember`
+- `getUserOrg` — tries `org_memberships` first, falls back to legacy `org_id` column
+- `adminSoftDeleteTrade(tradeId, orgId, reason)` — calls RPC, reason required, audited
+- `renameOrganisation`, `deleteOrganisation`
+- `toggleLeaderboardVisibility`
+
+---
+
+## Trade Model
+```typescript
+interface Trade {
+  id, user_id, ticker, entry_price, entry_target, stop_loss, target,
+  quantity, risk_amount, capital, exit_price, realised_pnl, notes,
+  status: "QUEUED" | "OPEN" | "CLOSED" | "STOPPED" | "TARGET_HIT",
+  created_at,
+  deleted_at, deleted_by, delete_reason  // soft-delete fields
+}
+```
+
+**Trade rules:**
+- Regular users: edit `quantity`, `stop_loss`, `target`, `notes` via `updateOwnTrade` RPC only
+- Regular users: cannot delete (blocked by `no_hard_delete_trades` RLS policy)
+- Org admins: soft-delete via `adminSoftDeleteTrade` — requires reason, creates audit log
+
+---
+
+## Leaderboard
+- **Members** see: rank, display_name, avatar, trade counts only
+- **Admins** see: above + lifetime P&L, monthly P&L, win rate, avg R
+- **Admins/owners** hidden by default (`on_leaderboard = false`)
+- Opt-in/out via "Join leaderboard" toggle on leaderboard page
+- **Group-scoped** — must be in a group to appear; admins switch between groups via tabs
+
+## Groups
+- One group per member per org (`unique(user_id, org_id)` on `org_group_members`)
+- Admins create/rename/delete groups, assign members via `/org/groups`
+- Members auto-land on their own group's leaderboard
+- No groups = leaderboard shows "Create groups" prompt for admins
+
+---
+
+## Demo Data
+6 dummy `trader_users` with no `auth_user_id` (display-only, cannot sign in).
+`anonymous_id = id` used as NOT NULL placeholder.
+**Why RLS is disabled on `trader_users` and `trades`.**
+
+Delete a dummy user:
+```sql
+delete from org_group_members where user_id = 'USER_ID';
+delete from org_memberships   where user_id = 'USER_ID';
+delete from trades            where user_id = 'USER_ID';
+delete from trader_users      where id      = 'USER_ID';
+```
+
+---
+
+## Known Issues / Debt
+- `trader_users` and `trades` have RLS disabled (demo data workaround)
+- `org_id` / `org_role` on `trader_users` are legacy — source of truth is `org_memberships`. RPCs keep them in sync. Safe to drop once nothing reads them directly.
+- `org/setup/page.tsx` is superseded by `org/new/page.tsx`
+- Light mode: all pages have been patched with `dark:` variants. If any new components are added, use `bg-white dark:bg-slate-800/50` pattern throughout.
+
+---
+
+## Environment Variables
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+Service role key is NOT in the codebase. All privileged operations go through security-definer RPCs.
+
+---
+
+## What to build next
+- Server-side price monitoring via Vercel Cron (trade automation without browser open)
+- Trailing stop / editable stop loss on open trades
+- Portfolio-level risk limits (total deployed capital cap enforcement)
+- Admin edit trade fields UI (`admin_edit_trade` RPC already exists in migration 001, no UI yet)
+- Org invite revocation UI in settings
+- Full audit log viewer for admins
