@@ -20,7 +20,7 @@ import { signOut }                from "@/lib/auth";
 import { useState, useRef, useEffect } from "react";
 
 const NAV_LINKS = [
-  { href: "/",          label: "Calculator" },
+  { href: "/",          label: "Trade" },
   { href: "/dashboard", label: "Dashboard"  },
   { href: "/ledger",    label: "Ledger"     },
 ];
