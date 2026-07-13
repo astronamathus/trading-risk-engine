@@ -29,8 +29,8 @@ interface OrgMember {
 }
 
 const inputClass =
-  "rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 " +
-  "placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
+  "rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 " +
+  "placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
 
 function PencilIcon() {
   return (
@@ -206,7 +206,7 @@ export default function GroupsPage() {
   }
 
   if (loading || authLoading) return (
-    <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-500">
+    <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-400 dark:text-slate-500">
       <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -225,12 +225,12 @@ export default function GroupsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Groups</h1>
-            <p className="text-sm text-slate-400 mt-0.5">{orgName}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Groups</h1>
+            <p className="text-sm text-slate-400 dark:text-slate-400 mt-0.5">{orgName}</p>
           </div>
           <button onClick={() => router.push("/org/settings")}
-            className="px-3 py-1.5 rounded-lg border border-slate-600 text-xs
-              text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors">
+            className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs
+              text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
             Settings
           </button>
         </div>
@@ -241,9 +241,9 @@ export default function GroupsPage() {
         )}
 
         {/* Create group */}
-        <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
           flex flex-col gap-4">
-          <h2 className="text-sm font-semibold text-slate-200">Create Group</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Create Group</h2>
           <div className="flex gap-3">
             <input
               type="text"
@@ -257,7 +257,7 @@ export default function GroupsPage() {
               onClick={handleCreateGroup}
               disabled={creating || !newGroupName.trim()}
               className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold
-                text-white hover:bg-blue-500 transition-colors disabled:opacity-40"
+                text-slate-900 dark:text-white hover:bg-blue-500 transition-colors disabled:opacity-40"
             >
               {creating ? "Creating…" : "Create"}
             </button>
@@ -274,7 +274,7 @@ export default function GroupsPage() {
 
               return (
                 <div key={group.id}
-                  className={`rounded-2xl border border-slate-700 bg-slate-800/50 p-6
+                  className={`rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
                     flex flex-col gap-4 ${isBusy ? "opacity-60 pointer-events-none" : ""}`}>
 
                   {/* Group header */}
@@ -291,27 +291,27 @@ export default function GroupsPage() {
                           }}
                           autoFocus
                           className="text-base font-semibold bg-transparent border-b border-blue-500
-                            text-white focus:outline-none flex-1"
+                            text-slate-900 dark:text-white focus:outline-none flex-1"
                         />
                         <button onClick={() => handleRenameGroup(group.id)}
-                          className="text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500">
+                          className="text-xs px-2 py-1 rounded-lg bg-blue-600 text-slate-900 dark:text-white hover:bg-blue-500">
                           Save
                         </button>
                         <button onClick={() => setEditingGroup(null)}
-                          className="text-xs text-slate-500 hover:text-slate-300">
+                          className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300">
                           Cancel
                         </button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold text-slate-200">{group.name}</h3>
-                        <span className="text-xs text-slate-600">
+                        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">{group.name}</h3>
+                        <span className="text-xs text-slate-400 dark:text-slate-600">
                           {group.member_count} member{group.member_count !== 1 ? "s" : ""}
                         </span>
                         <button
                           onClick={() => { setEditingGroup(group.id); setEditName(group.name); }}
-                          className="p-1 rounded text-slate-600 hover:text-slate-300
-                            hover:bg-slate-700 transition-colors">
+                          className="p-1 rounded text-slate-400 dark:text-slate-600 hover:text-slate-700 dark:text-slate-300
+                            hover:bg-slate-200 dark:bg-slate-700 transition-colors">
                           <PencilIcon/>
                         </button>
                       </div>
@@ -319,7 +319,7 @@ export default function GroupsPage() {
 
                     <button
                       onClick={() => handleDeleteGroup(group.id, group.name)}
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-red-400
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-600 hover:text-red-400
                         hover:bg-red-900/20 transition-colors shrink-0">
                       <TrashIcon/>
                     </button>
@@ -340,13 +340,13 @@ export default function GroupsPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-600 italic">No members assigned yet.</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-600 italic">No members assigned yet.</p>
                   )}
 
                   {/* Add unassigned members to this group */}
                   {unassigned.length > 0 && (
-                    <div className="border-t border-slate-700 pt-3">
-                      <p className="text-xs text-slate-500 mb-2">Add member to this group:</p>
+                    <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">Add member to this group:</p>
                       <div className="flex flex-wrap gap-2">
                         {unassigned.map(m => (
                           <button
@@ -354,15 +354,15 @@ export default function GroupsPage() {
                             onClick={() => handleSetMemberGroup(m.id, group.id)}
                             disabled={!!actionId}
                             className="flex items-center gap-1.5 px-2 py-1 rounded-lg border
-                              border-slate-600 text-xs text-slate-400 hover:text-slate-200
-                              hover:bg-slate-700 transition-colors disabled:opacity-40"
+                              border-slate-300 dark:border-slate-600 text-xs text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200
+                              hover:bg-slate-200 dark:bg-slate-700 transition-colors disabled:opacity-40"
                           >
                             {m.avatar_url ? (
                               <img src={m.avatar_url} alt=""
                                 className="w-4 h-4 rounded-full"/>
                             ) : (
                               <div className="w-4 h-4 rounded-full bg-slate-600 flex items-center
-                                justify-center text-xs font-bold text-slate-300">
+                                justify-center text-xs font-bold text-slate-700 dark:text-slate-300">
                                 {(m.display_name ?? "?").charAt(0)}
                               </div>
                             )}
@@ -380,17 +380,17 @@ export default function GroupsPage() {
 
         {/* Unassigned members */}
         {unassigned.length > 0 && groups.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-700 p-6 text-center">
-            <p className="text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-6 text-center">
+            <p className="text-sm text-slate-400 dark:text-slate-500">
               Create a group above to start organising your {members.length} members.
             </p>
           </div>
         )}
 
         {unassigned.length > 0 && groups.length > 0 && (
-          <section className="rounded-2xl border border-slate-700 bg-slate-800/30 p-6
+          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100/30 dark:bg-slate-800/30 p-6
             flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-slate-400">
+            <h2 className="text-sm font-semibold text-slate-400 dark:text-slate-400">
               Unassigned ({unassigned.length})
             </h2>
             {unassigned.map(m => (
@@ -423,18 +423,18 @@ function MemberRow({
   const initials = (member.display_name ?? "?").charAt(0).toUpperCase();
   return (
     <div className={`flex items-center justify-between py-2 px-3 rounded-xl
-      hover:bg-slate-700/30 transition-colors ${busy ? "opacity-40 pointer-events-none" : ""}`}>
+      hover:bg-slate-100/30 dark:bg-slate-700/30 transition-colors ${busy ? "opacity-40 pointer-events-none" : ""}`}>
       <div className="flex items-center gap-3">
         {member.avatar_url ? (
           <img src={member.avatar_url} alt={member.display_name ?? ""}
-            className="w-7 h-7 rounded-full border border-slate-600 shrink-0"/>
+            className="w-7 h-7 rounded-full border border-slate-300 dark:border-slate-600 shrink-0"/>
         ) : (
           <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center
-            justify-center text-xs font-bold text-slate-300 shrink-0">
+            justify-center text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
             {initials}
           </div>
         )}
-        <span className="text-sm text-slate-200">{member.display_name ?? "Unknown"}</span>
+        <span className="text-sm text-slate-800 dark:text-slate-200">{member.display_name ?? "Unknown"}</span>
         {member.org_role !== "member" && (
           <span className="text-xs px-1.5 py-0.5 rounded border border-amber-700
             text-amber-400 bg-amber-900/20 capitalize">
@@ -447,7 +447,7 @@ function MemberRow({
       <select
         value={currentGroupId ?? "none"}
         onChange={e => onSetGroup(member.id, e.target.value === "none" ? null : e.target.value)}
-        className="text-xs rounded-lg border border-slate-600 bg-slate-800 text-slate-400
+        className="text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-400
           px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
       >
         <option value="none">No group</option>

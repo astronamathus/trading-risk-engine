@@ -60,7 +60,7 @@ export default function JoinPage() {
 
   if (state === "loading" || authLoading) {
     return (
-      <main className="min-h-screen flex items-center justify-center gap-3 text-slate-500">
+      <main className="min-h-screen flex items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
         <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -81,14 +81,14 @@ export default function JoinPage() {
               <path d="M12 8v4M12 16h.01" strokeLinecap="round"/>
             </svg>
             <h2 className="text-lg font-semibold text-red-300">Invalid invite</h2>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
               This invite link is invalid, has expired, or has already been used.
               Ask your admin for a new one.
             </p>
           </div>
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
+            className="text-sm text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 transition-colors"
           >
             Go to dashboard →
           </button>
@@ -102,18 +102,18 @@ export default function JoinPage() {
       <div className="max-w-sm w-full flex flex-col gap-6">
 
         <div className="text-center flex flex-col gap-2">
-          <h1 className="text-2xl font-bold text-white">You're invited</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">You're invited</h1>
+          <p className="text-sm text-slate-400 dark:text-slate-500 dark:text-slate-400">
             You've been invited to join an organisation on Trade Risk Manager.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-white dark:bg-slate-800/50 p-6
           flex flex-col gap-5 shadow-xl">
 
-          <div className="flex flex-col gap-1 border-b border-slate-700 pb-4">
-            <span className="text-xs text-slate-500 uppercase tracking-wider">Organisation</span>
-            <span className="text-lg font-semibold text-slate-200">{invite?.org.name}</span>
+          <div className="flex flex-col gap-1 border-b border-slate-200 dark:border-slate-700 pb-4">
+            <span className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">Organisation</span>
+            <span className="text-lg font-semibold text-slate-800 dark:text-slate-200">{invite?.org.name}</span>
             {invite?.role === "admin" && (
               <span className="text-xs px-2 py-0.5 rounded-full border border-amber-700
                 text-amber-400 bg-amber-900/20 w-fit mt-1">
@@ -121,25 +121,25 @@ export default function JoinPage() {
               </span>
             )}
             {invite?.org.domain && (
-              <p className="text-xs text-slate-500 mt-1">
-                Requires an <span className="text-slate-400">@{invite.org.domain}</span> email
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                Requires an <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400">@{invite.org.domain}</span> email
               </p>
             )}
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-slate-500 uppercase tracking-wider">Joining as</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">Joining as</span>
             <div className="flex items-center gap-2">
               {user?.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.name}
-                  className="w-6 h-6 rounded-full border border-slate-600"/>
+                  className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600"/>
               ) : (
                 <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center
-                  justify-center text-xs font-bold text-white">
+                  justify-center text-xs font-bold text-slate-900 dark:text-white">
                   {user?.name?.charAt(0).toUpperCase()}
                 </div>
               )}
-              <span className="text-sm text-slate-300">{user?.email}</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">{user?.email}</span>
             </div>
           </div>
 
@@ -154,7 +154,7 @@ export default function JoinPage() {
             onClick={handleAccept}
             disabled={state === "joining"}
             className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold
-              text-white hover:bg-emerald-500 transition-colors disabled:opacity-50
+              text-slate-900 dark:text-white hover:bg-emerald-500 transition-colors disabled:opacity-50
               focus:outline-none focus:ring-2 focus:ring-emerald-400"
           >
             {state === "joining" ? (
@@ -169,10 +169,10 @@ export default function JoinPage() {
             ) : `Join ${invite?.org.name}`}
           </button>
 
-          <p className="text-xs text-slate-600 text-center">
+          <p className="text-xs text-slate-400 dark:text-slate-600 text-center">
             Not you?{" "}
             <button onClick={() => router.push("/auth")}
-              className="text-slate-500 hover:text-slate-300 underline">
+              className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 underline">
               Sign in with a different account
             </button>
           </p>

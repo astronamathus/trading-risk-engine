@@ -22,8 +22,8 @@ import {
 import type { Organisation, OrgMember } from "@/lib/db/org";
 
 const inputClass =
-  "rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 " +
-  "placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
+  "rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 " +
+  "placeholder:text-slate-400 dark:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
 
 function CopyIcon() {
   return (
@@ -50,7 +50,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_BADGE: Record<string, string> = {
   owner:  "border-purple-700 text-purple-400 bg-purple-900/20",
   admin:  "border-amber-700  text-amber-400  bg-amber-900/20",
-  member: "border-slate-600  text-slate-400  bg-slate-800/40",
+  member: "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-400  bg-slate-100/40 dark:bg-slate-800/40",
 };
 
 function DeleteOrgModal({ orgName, onConfirm, onCancel, loading }: {
@@ -61,34 +61,34 @@ function DeleteOrgModal({ orgName, onConfirm, onCancel, loading }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4
       bg-black/70 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl border border-red-900
-        bg-slate-900 shadow-2xl p-6 flex flex-col gap-5">
+        bg-white dark:bg-slate-900 shadow-2xl p-6 flex flex-col gap-5">
         <div>
           <h2 className="text-base font-semibold text-red-400">Delete organisation</h2>
-          <p className="text-sm text-slate-400 mt-2">
+          <p className="text-sm text-slate-400 dark:text-slate-400 mt-2">
             This will permanently delete{" "}
-            <span className="font-semibold text-slate-200">{orgName}</span>.
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{orgName}</span>.
             All members become indie users. Trade history is preserved. Irreversible.
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-slate-500">
-            Type <span className="font-mono text-slate-300">{orgName}</span> to confirm
+          <label className="text-xs text-slate-400 dark:text-slate-500">
+            Type <span className="font-mono text-slate-700 dark:text-slate-300">{orgName}</span> to confirm
           </label>
           <input type="text" value={typed} onChange={e => setTyped(e.target.value)}
             placeholder={orgName} autoFocus
-            className="w-full rounded-lg border border-red-900 bg-slate-800
-              px-3 py-2 text-slate-100 placeholder:text-slate-600 text-sm
+            className="w-full rounded-lg border border-red-900 bg-white dark:bg-slate-800
+              px-3 py-2 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:text-slate-600 text-sm
               focus:outline-none focus:ring-2 focus:ring-red-700"/>
         </div>
         <div className="flex gap-3">
           <button onClick={onCancel} disabled={loading}
-            className="flex-1 rounded-xl border border-slate-600 px-4 py-2.5
-              text-sm text-slate-400 hover:bg-slate-800 transition-colors">
+            className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2.5
+              text-sm text-slate-400 dark:text-slate-400 hover:bg-white dark:bg-slate-800 transition-colors">
             Cancel
           </button>
           <button onClick={onConfirm} disabled={typed !== orgName || loading}
             className="flex-1 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-semibold
-              text-white hover:bg-red-600 transition-colors disabled:opacity-40">
+              text-slate-900 dark:text-white hover:bg-red-600 transition-colors disabled:opacity-40">
             {loading ? "Deleting…" : "Delete permanently"}
           </button>
         </div>
@@ -242,7 +242,7 @@ export default function OrgSettingsPage() {
   }
 
   if (loading || authLoading) return (
-    <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-500">
+    <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-400 dark:text-slate-500">
       <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -280,29 +280,29 @@ export default function OrgSettingsPage() {
                       if (e.key === "Escape") { setEditingName(false); setNewName(org?.name ?? ""); }
                     }}
                     className="text-xl font-bold bg-transparent border-b-2 border-blue-500
-                      text-white focus:outline-none flex-1 min-w-0 pb-0.5"
+                      text-slate-900 dark:text-white focus:outline-none flex-1 min-w-0 pb-0.5"
                   />
                   <button onClick={handleRename} disabled={renaming}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white
+                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-slate-900 dark:text-white
                       hover:bg-blue-500 transition-colors disabled:opacity-50 shrink-0">
                     {renaming ? "…" : "Save"}
                   </button>
                   <button
                     onClick={() => { setEditingName(false); setNewName(org?.name ?? ""); }}
-                    className="text-xs text-slate-500 hover:text-slate-300 shrink-0">
+                    className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300 shrink-0">
                     Cancel
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 min-w-0">
-                  <h1 className="text-2xl font-bold tracking-tight text-white truncate">
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white truncate">
                     {org?.name}
                   </h1>
                   {/* Pencil — owner only */}
                   {isOwner && (
                     <button onClick={() => setEditingName(true)}
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300
-                        hover:bg-slate-700 transition-colors shrink-0">
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-600 hover:text-slate-700 dark:text-slate-300
+                        hover:bg-slate-200 dark:bg-slate-700 transition-colors shrink-0">
                       <PencilIcon/>
                     </button>
                   )}
@@ -321,12 +321,12 @@ export default function OrgSettingsPage() {
           )}
 
           {/* ── Invite generation — all admins ─────────────── */}
-          <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6
+          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
             flex flex-col gap-5">
-            <h2 className="text-sm font-semibold text-slate-200">Generate Invite Link</h2>
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Generate Invite Link</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-slate-500 uppercase tracking-wider">Role</label>
+                <label className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">Role</label>
                 <select value={inviteRole}
                   onChange={e => setInviteRole(e.target.value as "member" | "admin")}
                   className={`${inputClass} w-full`}>
@@ -335,7 +335,7 @@ export default function OrgSettingsPage() {
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-slate-500 uppercase tracking-wider">Expires in</label>
+                <label className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">Expires in</label>
                 <select value={inviteExpiry} onChange={e => setInviteExpiry(Number(e.target.value))}
                   className={`${inputClass} w-full`}>
                   <option value={1}>1 day</option>
@@ -344,7 +344,7 @@ export default function OrgSettingsPage() {
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-slate-500 uppercase tracking-wider">Max uses</label>
+                <label className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">Max uses</label>
                 <select value={inviteMaxUses}
                   onChange={e => setInviteMaxUses(
                     e.target.value === "unlimited" ? "unlimited" : Number(e.target.value)
@@ -359,14 +359,14 @@ export default function OrgSettingsPage() {
             </div>
             <button onClick={handleGenerateInvite} disabled={generating}
               className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold
-                text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
+                text-slate-900 dark:text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
               {generating ? "Generating…" : "Generate invite link"}
             </button>
             {generatedCode && (
               <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 rounded-lg border border-slate-600
-                  bg-slate-900 px-3 py-2">
-                  <span className="text-xs text-slate-400 font-mono flex-1 truncate">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-600
+                  bg-white dark:bg-slate-900 px-3 py-2">
+                  <span className="text-xs text-slate-400 dark:text-slate-400 font-mono flex-1 truncate">
                     {window.location.origin}/join/{generatedCode}
                   </span>
                   <button onClick={copyInviteLink}
@@ -376,7 +376,7 @@ export default function OrgSettingsPage() {
                     {copied ? "Copied!" : "Copy"}
                   </button>
                 </div>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-slate-400 dark:text-slate-600">
                   Expires in {inviteExpiry} day{inviteExpiry > 1 ? "s" : ""}.
                 </p>
               </div>
@@ -384,11 +384,11 @@ export default function OrgSettingsPage() {
           </section>
 
           {/* ── Members ─────────────────────────────────────── */}
-          <section className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6
+          <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6
             flex flex-col gap-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-200">Members</h2>
-              <span className="text-xs text-slate-500">{members.length} total</span>
+              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Members</h2>
+              <span className="text-xs text-slate-400 dark:text-slate-500">{members.length} total</span>
             </div>
 
             {owners.length > 0 && (
@@ -408,7 +408,7 @@ export default function OrgSettingsPage() {
                 onRemove={isAdmin ? handleRemove : undefined}/>
             )}
             {members.length === 0 && (
-              <p className="text-sm text-slate-600 text-center py-4">
+              <p className="text-sm text-slate-400 dark:text-slate-600 text-center py-4">
                 No members yet. Generate an invite link above.
               </p>
             )}
@@ -421,8 +421,8 @@ export default function OrgSettingsPage() {
               <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-slate-300 font-medium">Delete organisation</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">Delete organisation</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                     All members become indie users. Trade history is preserved. Irreversible.
                   </p>
                 </div>
@@ -451,7 +451,7 @@ function RoleGroup({ label, members, currentUserId, loading, onPromote, onDemote
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-xs uppercase tracking-wider text-slate-500 mb-2">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">{label}</p>
       {members.map(m => (
         <MemberRow key={m.id} member={m} currentUserId={currentUserId}
           isLoading={loading === m.id}
@@ -474,21 +474,21 @@ function MemberRow({ member, currentUserId, isLoading, onPromote, onDemote, onRe
     <div className={`flex items-center justify-between py-2.5 px-3 rounded-xl
       transition-colors ${isLoading
         ? "opacity-40 pointer-events-none"
-        : "hover:bg-slate-700/30"}`}>
+        : "hover:bg-slate-100/30 dark:bg-slate-700/30"}`}>
       <div className="flex items-center gap-3">
         {member.avatar_url ? (
           <img src={member.avatar_url} alt={member.display_name ?? ""}
-            className="w-7 h-7 rounded-full border border-slate-600 shrink-0"/>
+            className="w-7 h-7 rounded-full border border-slate-300 dark:border-slate-600 shrink-0"/>
         ) : (
           <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center
-            justify-center text-xs font-bold text-slate-300 shrink-0">
+            justify-center text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
             {initials}
           </div>
         )}
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-200">{member.display_name ?? "Unknown"}</span>
-            {isCurrentUser && <span className="text-xs text-slate-600">(you)</span>}
+            <span className="text-sm text-slate-800 dark:text-slate-200">{member.display_name ?? "Unknown"}</span>
+            {isCurrentUser && <span className="text-xs text-slate-400 dark:text-slate-600">(you)</span>}
           </div>
           <span className={`text-xs px-1.5 py-0.5 rounded border
             ${ROLE_BADGE[member.org_role] ?? ROLE_BADGE.member}`}>
@@ -507,15 +507,15 @@ function MemberRow({ member, currentUserId, isLoading, onPromote, onDemote, onRe
           )}
           {onDemote && (
             <button onClick={onDemote}
-              className="text-xs px-2 py-1 rounded-lg border border-slate-600
-                text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors">
+              className="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600
+                text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
               Remove admin
             </button>
           )}
           {onRemove && (
             <button onClick={onRemove}
-              className="text-xs px-2 py-1 rounded-lg border border-slate-600
-                text-slate-400 hover:text-red-400 hover:border-red-800
+              className="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600
+                text-slate-400 dark:text-slate-400 hover:text-red-400 hover:border-red-800
                 hover:bg-red-900/20 transition-colors">
               Remove
             </button>

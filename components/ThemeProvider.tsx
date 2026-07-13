@@ -4,10 +4,10 @@
 // components/ThemeProvider.tsx
 //
 // Manages theme: "light" | "dark" | "system"
-// - Persists choice to localStorage under "trm_theme"
-// - "system" follows the OS prefers-color-scheme media query
-// - Applies/removes "dark" class on <html> element
-// - Exposes useTheme() hook to any component
+// - Persists to localStorage under "trm_theme"
+// - "system" follows OS prefers-color-scheme
+// - Applies/removes "dark" class on <html>
+// - Default is "system" for new users
 // ============================================================
 
 import {
@@ -17,14 +17,14 @@ import {
 export type Theme = "light" | "dark" | "system";
 
 interface ThemeContextValue {
-  theme:     Theme;
-  resolved:  "light" | "dark";   // what's actually showing right now
-  setTheme:  (t: Theme) => void;
+  theme:    Theme;
+  resolved: "light" | "dark";
+  setTheme: (t: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme:    "dark",
-  resolved: "dark",
+  theme:    "system",
+  resolved: "light",
   setTheme: () => {},
 });
 
@@ -33,8 +33,17 @@ export function useTheme() {
 }
 
 function getSystemPref(): "light" | "dark" {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function getSavedTheme(): Theme {
+  if (typeof window === "undefined") return "system";
+  try {
+    const saved = localStorage.getItem("trm_theme") as Theme | null;
+    if (saved === "light" || saved === "dark" || saved === "system") return saved;
+  } catch {}
+  return "system";
 }
 
 function applyTheme(resolved: "light" | "dark") {
@@ -47,28 +56,26 @@ function applyTheme(resolved: "light" | "dark") {
 }
 
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("dark");
+  // Initialise directly from localStorage so React state matches
+  // what the blocking script already applied — no flash, no mismatch
+  const [theme, setThemeState] = useState<Theme>(() => getSavedTheme());
 
   const resolved: "light" | "dark" =
     theme === "system" ? getSystemPref() : theme;
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
-    localStorage.setItem("trm_theme", t);
+    try { localStorage.setItem("trm_theme", t); } catch {}
     const res = t === "system" ? getSystemPref() : t;
     applyTheme(res);
   }, []);
 
-  // On mount: read saved preference
+  // Sync DOM on mount (in case SSR/hydration differs)
   useEffect(() => {
-    const saved = localStorage.getItem("trm_theme") as Theme | null;
-    const initial = saved ?? "dark";
-    setThemeState(initial);
-    const res = initial === "system" ? getSystemPref() : initial;
-    applyTheme(res);
-  }, []);
+    applyTheme(resolved);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Watch OS preference changes when theme === "system"
+  // Watch OS preference when on "system"
   useEffect(() => {
     if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

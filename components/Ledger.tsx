@@ -22,7 +22,7 @@ function StatusBadge({ status }: { status: Trade["status"] }) {
   const styles: Record<Trade["status"], string> = {
     QUEUED:     "border-amber-700  text-amber-400  bg-amber-900/20",
     OPEN:       "border-emerald-700 text-emerald-400 bg-emerald-900/20",
-    CLOSED:     "border-slate-600  text-slate-400  bg-slate-800/40",
+    CLOSED:     "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-400  bg-slate-100/40 dark:bg-slate-800/40",
     STOPPED:    "border-red-800    text-red-400    bg-red-900/20",
     TARGET_HIT: "border-blue-600   text-blue-400   bg-blue-900/20",
   };
@@ -73,7 +73,7 @@ function PnlValue({ trade, ltp, mode, loading }: {
 }) {
   if (trade.status !== "OPEN") {
     if (!trade.realised_pnl && trade.realised_pnl !== 0)
-      return <span className="text-slate-600">—</span>;
+      return <span className="text-slate-400 dark:text-slate-600">—</span>;
     const profit = trade.realised_pnl >= 0;
     const colour = profit ? "text-emerald-400" : "text-red-400";
     const pct    = trade.entry_price > 0
@@ -84,14 +84,14 @@ function PnlValue({ trade, ltp, mode, loading }: {
     return (
       <span className={`${colour} font-medium tabular-nums`}>
         <PnlArrow profit={profit}/>{text}
-        <span className="text-slate-600 text-xs ml-1">R</span>
+        <span className="text-slate-400 dark:text-slate-600 text-xs ml-1">R</span>
       </span>
     );
   }
 
   if (loading && ltp === undefined)
-    return <span className="text-slate-600 text-xs animate-pulse">…</span>;
-  if (ltp === undefined) return <span className="text-slate-600">—</span>;
+    return <span className="text-slate-400 dark:text-slate-600 text-xs animate-pulse">…</span>;
+  if (ltp === undefined) return <span className="text-slate-400 dark:text-slate-600">—</span>;
 
   const diff   = ltp - trade.entry_price;
   const pnlVal = diff * trade.quantity;
@@ -129,7 +129,7 @@ function DetailPanel({ trade, ltp, onAction }: {
     aboveEntry ? `${toPctTarget.toFixed(1)}% to Target` :
                  `${toPctSL.toFixed(1)}% to Stop Loss`;
   const progressColour =
-    atEntry    ? "text-slate-400" :
+    atEntry    ? "text-slate-400 dark:text-slate-400" :
     aboveEntry ? "text-emerald-400" : "text-red-400";
 
   const capital       = trade.capital ?? 100000;
@@ -148,18 +148,18 @@ function DetailPanel({ trade, ltp, onAction }: {
 
   return (
     <td colSpan={8} className="px-4 pb-4 pt-0">
-      <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 flex flex-col gap-4 mt-1">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-4 flex flex-col gap-4 mt-1">
 
         <div className="grid grid-cols-5 gap-3 text-xs">
           {[
-            { label: "Entry",     value: formatINR(trade.entry_price), colour: "text-slate-300"   },
+            { label: "Entry",     value: formatINR(trade.entry_price), colour: "text-slate-700 dark:text-slate-300"   },
             { label: "Stop Loss", value: formatINR(trade.stop_loss),   colour: "text-red-400"     },
             { label: "Target",    value: formatINR(target),            colour: "text-emerald-400" },
             { label: priceLabel,  value: priceValue,                   colour: priceColour        },
-            { label: "R:R",       value: "1 : 2",                      colour: "text-slate-300"   },
+            { label: "R:R",       value: "1 : 2",                      colour: "text-slate-700 dark:text-slate-300"   },
           ].map(({ label, value, colour }) => (
             <div key={label} className="flex flex-col gap-0.5">
-              <span className="text-slate-500 uppercase tracking-wider">{label}</span>
+              <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</span>
               <span className={`font-semibold tabular-nums ${colour}`}>{value}</span>
             </div>
           ))}
@@ -168,11 +168,11 @@ function DetailPanel({ trade, ltp, onAction }: {
         {trade.status === "OPEN" && (
           <div className="flex flex-col gap-1.5">
             <div className="flex justify-between text-xs">
-              <span className="text-slate-600">Stop Loss</span>
+              <span className="text-slate-400 dark:text-slate-600">Stop Loss</span>
               <span className={`font-medium ${progressColour}`}>{progressLabel}</span>
-              <span className="text-slate-600">Target</span>
+              <span className="text-slate-400 dark:text-slate-600">Target</span>
             </div>
-            <div className="relative h-2 rounded-full bg-slate-700 overflow-visible">
+            <div className="relative h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-visible">
               <div
                 className={`absolute left-0 top-0 bottom-0 rounded-full transition-all duration-500 ${barColour}`}
                 style={{ width: `${progress}%` }}
@@ -182,7 +182,7 @@ function DetailPanel({ trade, ltp, onAction }: {
                 style={{ left: `calc(${entryPct}% - 1px)` }}
               />
             </div>
-            <div className="relative h-3 text-xs text-slate-500">
+            <div className="relative h-3 text-xs text-slate-400 dark:text-slate-500">
               <span className="absolute -translate-x-1/2" style={{ left: `${entryPct}%` }}>
                 Entry
               </span>
@@ -191,8 +191,8 @@ function DetailPanel({ trade, ltp, onAction }: {
         )}
 
         {trade.status !== "OPEN" && trade.realised_pnl !== null && (
-          <div className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3 text-xs">
-            <span className="text-slate-500 uppercase tracking-wider">Realised PnL</span>
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-xs">
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">Realised PnL</span>
             <div className={`text-lg font-bold mt-0.5 tabular-nums ${
               trade.realised_pnl >= 0 ? "text-emerald-400" : "text-red-400"
             }`}>
@@ -202,30 +202,30 @@ function DetailPanel({ trade, ltp, onAction }: {
           </div>
         )}
 
-        <div className="flex items-center gap-3 text-xs border-t border-slate-800 pt-3 flex-wrap">
+        <div className="flex items-center gap-3 text-xs border-t border-slate-200 dark:border-slate-800 pt-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 uppercase tracking-wider">Risk</span>
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">Risk</span>
             <RiskBadge riskPct={riskPct}/>
-            <span className="text-slate-600">({riskPct.toFixed(2)}%)</span>
+            <span className="text-slate-400 dark:text-slate-600">({riskPct.toFixed(2)}%)</span>
           </div>
-          <div className="w-px h-4 bg-slate-700"/>
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700"/>
           {trade.status === "OPEN" && (
             <>
               <div className="flex items-center gap-2">
-                <span className="text-slate-500 uppercase tracking-wider">Unrealised PnL</span>
+                <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">Unrealised PnL</span>
                 {unrealisedPnl !== null ? (
                   <span className={`font-semibold tabular-nums ${pnlPositive ? "text-emerald-400" : "text-red-400"}`}>
                     <PnlArrow profit={pnlPositive}/>
                     {pnlPositive ? "+" : ""}{formatINR(unrealisedPnl)}
                   </span>
-                ) : <span className="text-slate-600">—</span>}
+                ) : <span className="text-slate-400 dark:text-slate-600">—</span>}
               </div>
-              <div className="w-px h-4 bg-slate-700"/>
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700"/>
             </>
           )}
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 uppercase tracking-wider">Days Held</span>
-            <span className="font-semibold text-slate-300">
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">Days Held</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-300">
               {daysHeld === 0 ? "Today" : `${daysHeld}d`}
             </span>
           </div>
@@ -242,8 +242,8 @@ function DetailPanel({ trade, ltp, onAction }: {
             </button>
             <button
               onClick={() => onAction("close")}
-              className="flex-1 rounded-lg border border-slate-600 bg-slate-700/40 px-3 py-1.5
-                text-xs font-medium text-slate-300 hover:bg-slate-700 transition-colors"
+              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100/40 dark:bg-slate-700/40 px-3 py-1.5
+                text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:bg-slate-700 transition-colors"
             >
               Close Trade
             </button>
@@ -299,9 +299,9 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
   if (trades.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
-        <p className="text-slate-500 text-sm">No trades saved yet.</p>
-        <p className="text-slate-600 text-xs">
-          Calculate a position and click <span className="text-slate-400">Add to Ledger</span>.
+        <p className="text-slate-400 dark:text-slate-500 text-sm">No trades saved yet.</p>
+        <p className="text-slate-400 dark:text-slate-600 text-xs">
+          Calculate a position and click <span className="text-slate-400 dark:text-slate-400">Add to Ledger</span>.
         </p>
       </div>
     );
@@ -312,16 +312,16 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
 
       {/* Confirm overlay — close/stop only (no delete for regular users) */}
       {confirm && (
-        <div className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3
+        <div className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3
           flex items-center justify-between gap-4 text-sm">
-          <span className="text-slate-300">
+          <span className="text-slate-700 dark:text-slate-300">
             {confirm.action === "close" ? "Close trade at live price?"
             :                            "Mark stop loss as hit at live price?"}
           </span>
           <div className="flex gap-2 shrink-0">
             <button onClick={() => setConfirm(null)}
-              className="px-3 py-1 rounded-lg text-xs text-slate-400 border border-slate-600
-                hover:bg-slate-700 transition-colors">
+              className="px-3 py-1 rounded-lg text-xs text-slate-400 dark:text-slate-400 border border-slate-300 dark:border-slate-600
+                hover:bg-slate-200 dark:bg-slate-700 transition-colors">
               Cancel
             </button>
             <button
@@ -330,17 +330,17 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                 else handleClose(confirm.tradeId, "STOPPED");
               }}
               className="px-3 py-1 rounded-lg text-xs font-medium bg-blue-600
-                hover:bg-blue-500 text-white transition-colors">
+                hover:bg-blue-500 text-slate-900 dark:text-white transition-colors">
               Confirm
             </button>
           </div>
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-700">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table className="w-full text-sm">
-          <thead className="border-b border-slate-700 bg-slate-800/80">
-            <tr className="text-xs uppercase tracking-wider text-slate-500">
+          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80">
+            <tr className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">
               <th className="text-left px-4 py-3">Stock</th>
               <th className="text-right px-4 py-3">Qty</th>
               <th className="text-right px-4 py-3">Entry</th>
@@ -350,18 +350,18 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
               <th className="text-right px-4 py-3">
                 <div className="flex items-center justify-end gap-1">
                   <span>PnL</span>
-                  <div className="flex rounded-md overflow-hidden border border-slate-700 ml-1">
+                  <div className="flex rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 ml-1">
                     <button onClick={() => setPnlMode("value")}
                       className={`px-1.5 py-0.5 text-xs transition-colors ${
                         pnlMode === "value"
-                          ? "bg-slate-600 text-slate-200"
-                          : "text-slate-600 hover:text-slate-400"
+                          ? "bg-slate-600 text-slate-800 dark:text-slate-200"
+                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-400"
                       }`}>₹</button>
                     <button onClick={() => setPnlMode("percent")}
                       className={`px-1.5 py-0.5 text-xs transition-colors ${
                         pnlMode === "percent"
-                          ? "bg-slate-600 text-slate-200"
-                          : "text-slate-600 hover:text-slate-400"
+                          ? "bg-slate-600 text-slate-800 dark:text-slate-200"
+                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-400"
                       }`}>%</button>
                   </div>
                 </div>
@@ -372,8 +372,8 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   onClick={handleRefresh}
                   disabled={refreshing}
                   title="Refresh prices"
-                  className="p-1.5 rounded-md text-slate-500 hover:text-slate-300
-                    hover:bg-slate-700 transition-colors disabled:opacity-40"
+                  className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300
+                    hover:bg-slate-200 dark:bg-slate-700 transition-colors disabled:opacity-40"
                 >
                   <RefreshIcon spinning={refreshing}/>
                 </button>
@@ -396,20 +396,20 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   className={[
                     "transition-colors cursor-pointer",
                     busy     ? "opacity-40 pointer-events-none" : "",
-                    expanded ? "bg-slate-800/60" : "hover:bg-slate-800/30",
+                    expanded ? "bg-slate-50 dark:bg-slate-800/60" : "hover:bg-slate-100/30 dark:bg-slate-800/30",
                   ].join(" ")}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <svg
-                        className={`w-3.5 h-3.5 text-slate-500 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
+                        className={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
                         viewBox="0 0 16 16" fill="none">
                         <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5"
                           strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                       <div>
-                        <span className="font-mono font-semibold text-slate-200">{trade.ticker}</span>
-                        <div className="text-xs text-slate-600 mt-0.5">
+                        <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{trade.ticker}</span>
+                        <div className="text-xs text-slate-400 dark:text-slate-600 mt-0.5">
                           {new Date(trade.created_at).toLocaleDateString("en-IN", {
                             day: "2-digit", month: "short", year: "numeric",
                           })}
@@ -417,36 +417,36 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-300 tabular-nums">
+                  <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
                     {trade.quantity.toLocaleString("en-IN")}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-400 tabular-nums">
+                  <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
                     {formatINR(trade.entry_price)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {trade.status === "QUEUED" ? (
                       ltp !== undefined ? (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-slate-400 text-xs">{formatINR(ltp)}</span>
+                          <span className="text-slate-400 dark:text-slate-400 text-xs">{formatINR(ltp)}</span>
                           <span className="text-amber-400 text-xs">
                             {((trade.entry_price - ltp) / ltp * 100).toFixed(2)}% away
                           </span>
                         </div>
-                      ) : <span className="text-slate-600">—</span>
+                      ) : <span className="text-slate-400 dark:text-slate-600">—</span>
                     ) : trade.status !== "OPEN" ? (
-                      <span className="text-slate-600">—</span>
+                      <span className="text-slate-400 dark:text-slate-600">—</span>
                     ) : pricesLoading && ltp === undefined ? (
-                      <span className="text-slate-600 text-xs animate-pulse">…</span>
+                      <span className="text-slate-400 dark:text-slate-600 text-xs animate-pulse">…</span>
                     ) : ltp !== undefined ? (
-                      <span className="text-slate-300">{formatINR(ltp)}</span>
+                      <span className="text-slate-700 dark:text-slate-300">{formatINR(ltp)}</span>
                     ) : (
-                      <span className="text-slate-600">—</span>
+                      <span className="text-slate-400 dark:text-slate-600">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-300 tabular-nums">
-                    {value !== null ? formatINR(value) : <span className="text-slate-600">—</span>}
+                  <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
+                    {value !== null ? formatINR(value) : <span className="text-slate-400 dark:text-slate-600">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-400 tabular-nums">
+                  <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
                     {trade.risk_amount ? formatINR(trade.risk_amount) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -460,7 +460,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                 </tr>,
 
                 expanded ? (
-                  <tr key={`${trade.id}-detail`} className="bg-slate-800/20">
+                  <tr key={`${trade.id}-detail`} className="bg-slate-100/20 dark:bg-slate-800/20">
                     <DetailPanel
                       trade={trade}
                       ltp={ltp}
@@ -485,19 +485,19 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
             }, 0);
             const pnlPositive = totalPnl >= 0;
             return (
-              <tfoot className="border-t border-slate-700 bg-slate-800/60">
-                <tr className="text-xs text-slate-400">
-                  <td className="px-4 py-3 font-medium text-slate-300">
+              <tfoot className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+                <tr className="text-xs text-slate-400 dark:text-slate-400">
+                  <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">
                     Portfolio
-                    <div className="text-slate-600 font-normal">{openTrades.length} open positions</div>
+                    <div className="text-slate-400 dark:text-slate-600 font-normal">{openTrades.length} open positions</div>
                   </td>
                   <td className="px-4 py-3"/>
                   <td className="px-4 py-3"/>
                   <td className="px-4 py-3"/>
-                  <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-200">
+                  <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200">
                     {formatINR(totalValue)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-400">
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-400 dark:text-slate-400">
                     {formatINR(totalRisk)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium">

@@ -14,20 +14,20 @@ function formatINR(v: number) {
 }
 
 function Stat({
-  label, value, sub, colour = "text-slate-100", border = true,
+  label, value, sub, colour = "text-slate-900 dark:text-slate-100", border = true,
 }: {
   label: string; value: string; sub?: string;
   colour?: string; border?: boolean;
 }) {
   return (
-    <div className={`flex flex-col gap-0.5 px-5 ${border ? "border-r border-slate-700/60" : ""} shrink-0 min-w-0`}>
-      <span className="text-xs text-slate-500 uppercase tracking-wider whitespace-nowrap h-4 flex items-center">
+    <div className={`flex flex-col gap-0.5 px-5 ${border ? "border-r border-slate-200/60 dark:border-slate-700/60" : ""} shrink-0 min-w-0`}>
+      <span className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap h-4 flex items-center">
         {label}
       </span>
       <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${colour}`}>
         {value}
       </span>
-      <span className="text-xs text-slate-600 whitespace-nowrap h-4 flex items-center">
+      <span className="text-xs text-slate-400 dark:text-slate-600 whitespace-nowrap h-4 flex items-center">
         {sub ?? ""}
       </span>
     </div>
@@ -80,12 +80,12 @@ export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
     : null;
 
   const rSign   = avgR !== null && avgR >= 0 ? "+" : "";
-  const rColour = avgR === null ? "text-slate-500"
+  const rColour = avgR === null ? "text-slate-400 dark:text-slate-500"
     : avgR >= 0 ? "text-emerald-400" : "text-red-400";
 
   return (
     <div className="sticky top-0 z-40 w-full">
-      <div className="rounded-2xl border border-slate-700/80 bg-slate-900/95 backdrop-blur-md
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md
         shadow-2xl shadow-black/40 py-3 flex items-center overflow-x-auto">
 
         <Stat
@@ -105,7 +105,7 @@ export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
           colour={
             portfolioRiskPct > 5  ? "text-red-400"
             : portfolioRiskPct > 2 ? "text-amber-400"
-            : "text-slate-100"
+            : "text-slate-900 dark:text-slate-100"
           }
         />
         <Stat

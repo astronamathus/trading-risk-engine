@@ -13,12 +13,12 @@ function Card({ onClick, accent, icon, title, sub }: {
 }) {
   return (
     <button onClick={onClick}
-      className={`rounded-2xl border bg-slate-800/50 p-6 flex flex-col gap-4
-        text-left transition-all hover:bg-slate-800 focus:outline-none focus:ring-2 ${accent}`}>
+      className={`rounded-2xl border bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-4
+        text-left transition-all hover:bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 ${accent}`}>
       {icon}
       <div>
-        <p className="font-semibold text-slate-200">{title}</p>
-        <p className="text-xs text-slate-500 mt-1">{sub}</p>
+        <p className="font-semibold text-slate-800 dark:text-slate-200">{title}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{sub}</p>
       </div>
     </button>
   );
@@ -65,10 +65,10 @@ function OnboardingInner() {
       <div className="w-full max-w-lg flex flex-col gap-8">
 
         <div className="text-center flex flex-col gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Welcome{firstName ? `, ${firstName}` : ""}
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-400 dark:text-slate-400">
             How will you be using Trade Risk Manager?
           </p>
         </div>
@@ -82,7 +82,7 @@ function OnboardingInner() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card
               onClick={() => setStep("indie_confirm")}
-              accent="border-slate-700 hover:border-blue-500 focus:ring-blue-500"
+              accent="border-slate-200 dark:border-slate-700 hover:border-blue-500 focus:ring-blue-500"
               icon={
                 <svg className="w-8 h-8 text-blue-400" viewBox="0 0 32 32" fill="none"
                   stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -95,7 +95,7 @@ function OnboardingInner() {
             />
             <Card
               onClick={() => setStep("org_pick")}
-              accent="border-slate-700 hover:border-emerald-500 focus:ring-emerald-500"
+              accent="border-slate-200 dark:border-slate-700 hover:border-emerald-500 focus:ring-emerald-500"
               icon={
                 <svg className="w-8 h-8 text-emerald-400" viewBox="0 0 32 32" fill="none"
                   stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -112,21 +112,21 @@ function OnboardingInner() {
         )}
 
         {step === "indie_confirm" && (
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 flex flex-col gap-4">
-            <p className="text-sm text-slate-300">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-4">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
               You'll have full control of your trades and portfolio.
               No one else can see your data. You can join an organisation
               later at any time via an invite link.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setStep("pick_type")}
-                className="flex-1 rounded-xl border border-slate-600 px-4 py-2.5
-                  text-sm text-slate-400 hover:bg-slate-700 transition-colors">
+                className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2.5
+                  text-sm text-slate-400 dark:text-slate-400 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
                 Back
               </button>
               <button onClick={handleIndie} disabled={loading}
                 className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm
-                  font-semibold text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
+                  font-semibold text-slate-900 dark:text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
                 {loading ? "Setting up…" : "Get started"}
               </button>
             </div>
@@ -134,8 +134,8 @@ function OnboardingInner() {
         )}
 
         {step === "org_pick" && (
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 flex flex-col gap-4">
-            <p className="text-sm font-medium text-slate-400">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-4">
+            <p className="text-sm font-medium text-slate-400 dark:text-slate-400">
               Are you setting up a new desk, or joining an existing one?
             </p>
             <div className="flex flex-col gap-3">
@@ -147,46 +147,46 @@ function OnboardingInner() {
                 <p className="text-xs text-emerald-700 mt-0.5">I'm the admin / setting up a new trading desk</p>
               </button>
               <button onClick={() => setStep("org_join")}
-                className="w-full rounded-xl border border-slate-600 bg-slate-700/40
-                  px-4 py-4 text-left hover:bg-slate-700 transition-colors
+                className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-100/40 dark:bg-slate-700/40
+                  px-4 py-4 text-left hover:bg-slate-200 dark:bg-slate-700 transition-colors
                   focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <p className="text-sm font-semibold text-slate-300">Join with an invite</p>
-                <p className="text-xs text-slate-500 mt-0.5">I have an invite link or code from my admin</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Join with an invite</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">I have an invite link or code from my admin</p>
               </button>
             </div>
             <button onClick={() => setStep("pick_type")}
-              className="text-xs text-slate-600 hover:text-slate-400 transition-colors text-center pt-1">
+              className="text-xs text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-400 transition-colors text-center pt-1">
               Back
             </button>
           </div>
         )}
 
         {step === "org_join" && (
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 flex flex-col gap-4">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-slate-300">Invite link or code</label>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Invite link or code</label>
               <input
                 type="text"
                 placeholder="https://… or paste your code"
                 value={inviteCode}
                 onChange={e => setInviteCode(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleJoinWithCode()}
-                className="w-full rounded-lg border border-slate-600 bg-slate-800
-                  px-3 py-2 text-slate-100 placeholder:text-slate-500
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800
+                  px-3 py-2 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:text-slate-500
                   focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 autoFocus
               />
-              <p className="text-xs text-slate-600">You can paste the full invite URL or just the code.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-600">You can paste the full invite URL or just the code.</p>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setStep("org_pick")}
-                className="flex-1 rounded-xl border border-slate-600 px-4 py-2.5
-                  text-sm text-slate-400 hover:bg-slate-700 transition-colors">
+                className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2.5
+                  text-sm text-slate-400 dark:text-slate-400 hover:bg-slate-200 dark:bg-slate-700 transition-colors">
                 Back
               </button>
               <button onClick={handleJoinWithCode} disabled={!inviteCode.trim()}
                 className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm
-                  font-semibold text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
+                  font-semibold text-slate-900 dark:text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
                 Continue
               </button>
             </div>

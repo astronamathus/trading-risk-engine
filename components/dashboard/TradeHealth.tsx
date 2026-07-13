@@ -60,7 +60,7 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
 
   const STATUS_STYLE: Record<string, string> = {
     TARGET_HIT: "border-blue-700   text-blue-400   bg-blue-900/20",
-    CLOSED:     "border-slate-600  text-slate-400  bg-slate-800/40",
+    CLOSED:     "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-400  bg-slate-100/40 dark:bg-slate-800/40",
     STOPPED:    "border-red-800    text-red-400    bg-red-900/20",
   };
   const STATUS_LABEL: Record<string, string> = {
@@ -68,16 +68,16 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5 flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-4">
       {/* Toggle header */}
       <div className="flex items-center justify-between">
-        <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
+        <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden text-xs">
           <button
             onClick={() => setView("open")}
             className={`px-3 py-1.5 font-medium transition-colors ${
               view === "open"
-                ? "bg-slate-700 text-slate-100"
-                : "text-slate-500 hover:text-slate-300"
+                ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300"
             }`}>
             Open ({open.length})
           </button>
@@ -85,21 +85,21 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
             onClick={() => setView("closed")}
             className={`px-3 py-1.5 font-medium transition-colors ${
               view === "closed"
-                ? "bg-slate-700 text-slate-100"
-                : "text-slate-500 hover:text-slate-300"
+                ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:text-slate-300"
             }`}>
             Closed ({closed.length})
           </button>
         </div>
         {view === "open" && winRate !== null && (
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-400 dark:text-slate-500">
             <span className={`font-semibold ${parseInt(winRate) >= 50 ? "text-emerald-400" : "text-red-400"}`}>
               {winRate}%
             </span>{" "}winning
           </span>
         )}
         {view === "closed" && closed.length > 0 && (
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-400 dark:text-slate-500">
             <span className={`font-semibold ${
               closed.reduce((s, t) => s + (t.realised_pnl ?? 0), 0) >= 0
                 ? "text-emerald-400" : "text-red-400"
@@ -114,7 +114,7 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
       {/* ── Open view ── */}
       {view === "open" && (
         open.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-slate-600 text-sm">
+          <div className="flex items-center justify-center py-8 text-slate-400 dark:text-slate-600 text-sm">
             No open positions.
           </div>
         ) : (
@@ -129,10 +129,10 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${row.dot}`}/>
-                    <span className="text-xs text-slate-400">{row.label}</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-400">{row.label}</span>
                   </div>
                   <span className={`text-sm font-semibold ${
-                    row.items.length > 0 ? row.badge.split(" ")[1] : "text-slate-600"
+                    row.items.length > 0 ? row.badge.split(" ")[1] : "text-slate-400 dark:text-slate-600"
                   }`}>
                     {row.items.length}
                   </span>
@@ -153,7 +153,7 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
               </div>
             ))}
             {unknown.length > 0 && (
-              <p className="text-xs text-slate-600 pl-4">
+              <p className="text-xs text-slate-400 dark:text-slate-600 pl-4">
                 {unknown.length} trade{unknown.length > 1 ? "s" : ""} awaiting price data…
               </p>
             )}
@@ -164,7 +164,7 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
       {/* ── Closed view ── */}
       {view === "closed" && (
         closed.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-slate-600 text-sm">
+          <div className="flex items-center justify-center py-8 text-slate-400 dark:text-slate-600 text-sm">
             No closed trades yet.
           </div>
         ) : (
@@ -176,9 +176,9 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
                 ? (pnl / t.risk_amount).toFixed(2) : null;
               return (
                 <div key={t.id}
-                  className="flex items-center justify-between py-1.5 border-b border-slate-800/60 last:border-0">
+                  className="flex items-center justify-between py-1.5 border-b border-slate-200/60 dark:border-slate-800/60 last:border-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-slate-200">
+                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-200">
                       {t.ticker.replace(/\.(NS|BO)$/, "")}
                     </span>
                     <span className={`text-xs px-1.5 py-0.5 rounded border
@@ -200,7 +200,7 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
               );
             })}
             {closed.length > 8 && (
-              <p className="text-xs text-slate-600 text-center pt-1">
+              <p className="text-xs text-slate-400 dark:text-slate-600 text-center pt-1">
                 Showing last 8 of {closed.length} — see Ledger for full history
               </p>
             )}

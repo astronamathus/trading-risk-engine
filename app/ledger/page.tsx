@@ -144,8 +144,8 @@ export default function LedgerPage() {
       <div className="mx-auto max-w-5xl flex flex-col gap-6">
 
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-white">Trade Ledger</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Trade Ledger</h1>
+          <p className="text-sm text-slate-400 dark:text-slate-400">
             Prices refresh every 15 minutes automatically while this page is open.
           </p>
         </div>
@@ -161,8 +161,8 @@ export default function LedgerPage() {
                 {queued} Queued
               </span>
             )}
-            <span className="text-xs px-3 py-1 rounded-full border border-slate-600
-              text-slate-400 bg-slate-800/40" title="Manually closed by you">
+            <span className="text-xs px-3 py-1 rounded-full border border-slate-300 dark:border-slate-600
+              text-slate-400 dark:text-slate-400 bg-slate-100/40 dark:bg-slate-800/40" title="Manually closed by you">
               {closed} Closed
             </span>
             <span className="text-xs px-3 py-1 rounded-full border border-red-800
@@ -173,7 +173,7 @@ export default function LedgerPage() {
             )}
           </div>
           {lastChecked && (
-            <span className="text-xs text-slate-600 flex items-center gap-1">
+            <span className="text-xs text-slate-400 dark:text-slate-600 flex items-center gap-1">
               <ClockIcon className="w-3 h-3"/>
               Last checked {lastChecked.toLocaleTimeString("en-IN", {
                 hour: "2-digit", minute: "2-digit", second: "2-digit",
@@ -182,9 +182,9 @@ export default function LedgerPage() {
           )}
         </div>
 
-        <section className="rounded-2xl border border-slate-700 bg-slate-800/50 backdrop-blur p-6 shadow-xl">
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 backdrop-blur p-6 shadow-xl">
           {loading ? (
-            <div className="flex items-center justify-center py-16 gap-3 text-slate-500">
+            <div className="flex items-center justify-center py-16 gap-3 text-slate-400 dark:text-slate-500">
               <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
