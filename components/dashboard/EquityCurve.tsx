@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip,
+  AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { Trade } from "@/lib/db/trades";
@@ -15,39 +15,36 @@ interface EquityCurveProps {
 const CLOSED_STATUSES = ["CLOSED", "STOPPED", "TARGET_HIT"] as const;
 
 function formatINR(v: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 0,
-  }).format(v);
+  const abs = Math.abs(v);
+  const str = abs >= 100000
+    ? `₹${(abs / 100000).toFixed(2)}L`
+    : abs >= 1000
+      ? `₹${(abs / 1000).toFixed(1)}k`
+      : `₹${abs.toFixed(0)}`;
+  return v < 0 ? `-${str}` : str;
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "2-digit", month: "short",
-  });
+function pickTicks(len: number, max = 6): number[] {
+  if (len <= max) return Array.from({ length: len }, (_, i) => i);
+  const step = (len - 1) / (max - 1);
+  const picks = Array.from({ length: max }, (_, i) => Math.round(i * step));
+  picks[max - 1] = len - 1;
+  return [...new Set(picks)];
+}
+
+function tickLabel(ts: number) {
+  return new Date(ts).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
 export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
-  // Combined equity curve: each closed trade adds its P&L cumulatively
-  // sorted by created_at, representing portfolio equity over time
-  const equitySeries = useMemo(() => {
+  const { fullSeries, monthlyBars, openMtm } = useMemo(() => {
     const closed = trades
       .filter(t => (CLOSED_STATUSES as readonly string[]).includes(t.status) && t.realised_pnl !== null)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-    let cum = 0;
-    const points = closed.map(t => {
-      cum += t.realised_pnl ?? 0;
-      return {
-        date:   formatDate(t.created_at),
-        equity: Math.round(cum),
-        ticker: t.ticker,
-        pnl:    t.realised_pnl ?? 0,
-        status: t.status,
-      };
-    });
-
-    // Add current MTM point if there are open trades
+    // Current unrealised P&L across all open positions
     const openPnl = trades
       .filter(t => t.status === "OPEN")
       .reduce((s, t) => {
@@ -55,131 +52,259 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
         return s + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0);
       }, 0);
 
-    if (openPnl !== 0 && points.length > 0) {
-      points.push({
-        date:   "Now",
-        equity: Math.round(cum + openPnl),
-        ticker: "",
-        pnl:    openPnl,
-        status: "OPEN" as Trade["status"],
+    // Build realised cumulative series
+    let cum = 0;
+    const points = closed.map(t => {
+      cum += t.realised_pnl ?? 0;
+      return {
+        ts:       new Date(t.created_at).getTime(),
+        realised: Math.round(cum),
+        ticker:   t.ticker.replace(/\.(NS|BO)$/, ""),
+        month:    new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
+      };
+    });
+
+    // MTM series = realised equity + current open P&L plotted at every point
+    // Then a final "Now" point showing today's combined equity
+    const pointsWithMtm = points.map(p => ({
+      ...p,
+      // MTM runs alongside realised — it's realised + open unrealised at this moment
+      // (we don't have historical open P&L, so MTM is a flat offset of current open pnl)
+      mtm: openPnl !== 0 ? Math.round(p.realised + openPnl) : null,
+    }));
+
+    // Add a "Now" point to extend MTM to today
+    if (pointsWithMtm.length > 0 && openPnl !== 0) {
+      pointsWithMtm.push({
+        ts:       Date.now(),
+        realised: Math.round(cum),
+        mtm:      Math.round(cum + openPnl),
+        ticker:   "",
+        month:    new Date().toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
       });
     }
 
-    return points;
+    // Monthly P&L
+    const map: Record<string, number> = {};
+    closed.forEach(t => {
+      const key = new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+      map[key] = (map[key] ?? 0) + (t.realised_pnl ?? 0);
+    });
+    const monthlyBars = Object.entries(map).map(([month, pnl]) => ({ month, pnl: Math.round(pnl) }));
+
+    return { fullSeries: pointsWithMtm, monthlyBars, openMtm: Math.round(openPnl) };
   }, [trades, livePrices]);
 
-  // Monthly P&L breakdown for bar reference
-  const monthlyBars = useMemo(() => {
-    const map: Record<string, number> = {};
-    trades
-      .filter(t => (CLOSED_STATUSES as readonly string[]).includes(t.status))
-      .forEach(t => {
-        const key = new Date(t.created_at).toLocaleDateString("en-IN", {
-          month: "short", year: "2-digit",
-        });
-        map[key] = (map[key] ?? 0) + (t.realised_pnl ?? 0);
-      });
-    return Object.entries(map).map(([month, pnl]) => ({ month, pnl: Math.round(pnl) }));
-  }, [trades]);
+  // Filter to selected month (rebased to zero at month start)
+  const series = useMemo(() => {
+    if (!selectedMonth) return fullSeries;
+    const filtered = fullSeries.filter(p => p.month === selectedMonth);
+    if (filtered.length === 0) return [];
+    const baseVal = fullSeries.filter(p => p.ts < filtered[0].ts).slice(-1)[0]?.realised ?? 0;
+    return filtered.map(p => ({
+      ...p,
+      realised: Math.round(p.realised - baseVal),
+      mtm:      p.mtm !== null ? Math.round(p.mtm - baseVal) : null,
+    }));
+  }, [fullSeries, selectedMonth]);
 
-  const isEmpty = equitySeries.length === 0;
-  const finalEquity = equitySeries[equitySeries.length - 1]?.equity ?? 0;
-  const isPositive  = finalEquity >= 0;
+  // Smart tick labels
+  const tickIndices = useMemo(() => new Set(pickTicks(series.length)), [series.length]);
+  const chartData   = useMemo(() =>
+    series.map((p, i) => ({
+      ...p,
+      label: tickIndices.has(i) ? tickLabel(p.ts) : "",
+    })),
+    [series, tickIndices]
+  );
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const isEmpty       = chartData.length === 0;
+  const lastRealised  = chartData[chartData.length - 1]?.realised ?? 0;
+  const lastMtm       = chartData[chartData.length - 1]?.mtm ?? lastRealised;
+  const displayTotal  = openMtm !== 0 && !selectedMonth ? lastMtm : lastRealised;
+  const isPositive    = displayTotal >= 0;
+  const hasMtm        = openMtm !== 0 && !selectedMonth;
+
+  const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
-    const d = payload[0];
+    const ts = payload[0]?.payload?.ts;
     return (
-      <div className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-xs shadow-xl">
-        <p className="text-slate-400 dark:text-slate-400 mb-1">{label}</p>
-        <p className="font-semibold" style={{ color: d.value >= 0 ? "#10b981" : "#f87171" }}>
-          Portfolio: {formatINR(d.value)}
-        </p>
-        {payload[1] && (
-          <p className="text-slate-400 dark:text-slate-400 mt-0.5">
-            Trade: {payload[1].value >= 0 ? "+" : ""}{formatINR(payload[1].value)}
+      <div className="rounded-xl border border-slate-200 dark:border-slate-600
+        bg-white dark:bg-slate-900 px-3 py-2.5 text-xs shadow-xl min-w-[160px]">
+        {ts && (
+          <p className="text-slate-500 dark:text-slate-400 mb-2 font-medium">
+            {tickLabel(ts)}
           </p>
         )}
+        {payload.map((p: any) => (
+          p.value !== null && p.value !== undefined ? (
+            <div key={p.name} className="flex items-center justify-between gap-4 mb-1">
+              <span className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+                <span className="w-2 h-2 rounded-full" style={{ background: p.color }}/>
+                {p.name}
+              </span>
+              <span className="font-semibold tabular-nums"
+                style={{ color: p.value >= 0 ? "#10b981" : "#f87171" }}>
+                {p.value >= 0 ? "+" : ""}{formatINR(p.value)}
+              </span>
+            </div>
+          ) : null
+        ))}
       </div>
     );
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-5">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700
+      bg-white dark:bg-slate-800/50 p-5 flex flex-col gap-5">
+
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Portfolio Equity Curve</h3>
-        <div className="flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Portfolio Equity Curve
+          </h3>
+          {selectedMonth && (
+            <button onClick={() => setSelectedMonth(null)}
+              className="text-xs px-2 py-0.5 rounded-full border border-slate-300
+                dark:border-slate-600 text-slate-500 dark:text-slate-400
+                hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+              {selectedMonth} ✕
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
           {!isEmpty && (
-            <span className={`font-semibold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
-              {isPositive ? "+" : ""}{formatINR(finalEquity)} total
+            <span className={`font-semibold ${isPositive
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-red-600 dark:text-red-400"}`}>
+              {isPositive ? "+" : ""}{formatINR(displayTotal)} total
             </span>
           )}
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-0.5 bg-emerald-500 inline-block rounded"/>
-            Cumulative P&L
+            Realised
           </span>
+          {hasMtm && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 bg-blue-400 inline-block rounded"
+                style={{ borderTop: "2px dashed #60a5fa", height: 0 }}/>
+              MTM
+            </span>
+          )}
         </div>
       </div>
 
+      {/* Chart */}
       {isEmpty ? (
-        <div className="flex items-center justify-center h-48 text-slate-400 dark:text-slate-600 text-sm">
+        <div className="flex items-center justify-center h-48
+          text-slate-400 dark:text-slate-600 text-sm">
           Close some trades to see your equity curve.
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={equitySeries} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <defs>
-              <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={isPositive ? "#10b981" : "#f87171"} stopOpacity={0.15}/>
+              <linearGradient id="realisedGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={isPositive ? "#10b981" : "#f87171"} stopOpacity={0.2}/>
                 <stop offset="95%" stopColor={isPositive ? "#10b981" : "#f87171"} stopOpacity={0}/>
               </linearGradient>
+              <linearGradient id="mtmGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#60a5fa" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="#60a5fa" stopOpacity={0}/>
+              </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
+
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"
+              strokeOpacity={0.35} vertical={false}/>
+
             <XAxis
-              dataKey="date"
-              tick={{ fill: "#475569", fontSize: 11 }}
+              dataKey="label"
+              tick={{ fill: "#94a3b8", fontSize: 11 }}
               axisLine={false} tickLine={false}
+              interval={0}
+              tickFormatter={v => v ?? ""}
             />
+
             <YAxis
-              tick={{ fill: "#475569", fontSize: 11 }}
+              tick={{ fill: "#94a3b8", fontSize: 11 }}
               axisLine={false} tickLine={false}
-              tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`}
-              width={52}
+              tickFormatter={v => formatINR(v)}
+              width={58}
             />
-            <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 2"/>
+
+            <ReferenceLine y={0} stroke="#94a3b8"
+              strokeDasharray="4 2" strokeOpacity={0.6}/>
+
             <Tooltip content={<CustomTooltip/>}/>
+
+            {/* MTM below realised so realised renders on top */}
+            {hasMtm && (
+              <Area
+                type="monotone"
+                dataKey="mtm"
+                name="MTM"
+                stroke="#60a5fa"
+                strokeWidth={1.5}
+                strokeDasharray="6 3"
+                fill="url(#mtmGrad)"
+                dot={false}
+                activeDot={{ r: 3, strokeWidth: 0 }}
+                connectNulls
+              />
+            )}
+
             <Area
               type="monotone"
-              dataKey="equity"
-              name="Portfolio"
+              dataKey="realised"
+              name="Realised"
               stroke={isPositive ? "#10b981" : "#f87171"}
               strokeWidth={2}
-              fill="url(#equityGrad)"
-              dot={{ fill: isPositive ? "#10b981" : "#f87171", r: 3, strokeWidth: 0 }}
+              fill="url(#realisedGrad)"
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 0 }}
               connectNulls
             />
           </AreaChart>
         </ResponsiveContainer>
       )}
 
-      {/* Monthly P&L summary row */}
+      {/* Monthly chips */}
       {monthlyBars.length > 0 && (
         <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-          <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Monthly P&L</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500
+            uppercase tracking-wider mb-3">
+            Monthly P&L · click to zoom
+          </p>
           <div className="flex gap-2 flex-wrap">
-            {monthlyBars.map(({ month, pnl }) => (
-              <div key={month}
-                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg border text-xs
-                  ${pnl >= 0
-                    ? "border-emerald-800 bg-emerald-900/20 text-emerald-400"
-                    : "border-red-900 bg-red-900/20 text-red-400"
+            {monthlyBars.map(({ month, pnl }) => {
+              const active = selectedMonth === month;
+              const pos    = pnl >= 0;
+              return (
+                <button key={month}
+                  onClick={() => setSelectedMonth(active ? null : month)}
+                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl
+                    border text-xs transition-all cursor-pointer
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    active
+                      ? pos
+                        ? "border-emerald-500 bg-emerald-500/20 ring-2 ring-emerald-400/30"
+                        : "border-red-500 bg-red-500/20 ring-2 ring-red-400/30"
+                      : pos
+                        ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                        : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"
                   }`}>
-                <span className="text-slate-400 dark:text-slate-500 text-xs">{month}</span>
-                <span className="font-semibold tabular-nums">
-                  {pnl >= 0 ? "+" : ""}{formatINR(pnl)}
-                </span>
-              </div>
-            ))}
+                  <span className="text-slate-500 dark:text-slate-400">{month}</span>
+                  <span className={`font-semibold tabular-nums ${
+                    pos
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
+                  }`}>
+                    {pos ? "+" : ""}{formatINR(pnl)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
