@@ -266,21 +266,24 @@ export default function OrgSettingsPage() {
         .select("user_id, org_role, trader_users(id, display_name, avatar_url, capital_limit)")
         .eq("org_id", orgData.id);
 
-      const groupIds = groupList.map((g: OrgGroup) => g.id);
-      const { data: gmData } = groupIds.length > 0
-        ? await supabase
-            .from("org_group_members")
-            .select("user_id, group_id, org_groups(name)")
-            .in("group_id", groupIds)
-        : { data: [] };
-
+      // ── Group membership ────────────────────────────────────
+      // Use get_group_leaderboard per group — the same RPC the leaderboard
+      // page uses successfully. It returns rows with user_id for each group.
       const groupMap: Record<string, { group_id: string; group_name: string }> = {};
-      (gmData ?? []).forEach((gm: any) => {
-        groupMap[gm.user_id] = {
-          group_id:   gm.group_id,
-          group_name: gm.org_groups?.name ?? "",
-        };
-      });
+
+      await Promise.all(
+        groupList.map(async (g: OrgGroup) => {
+          const { data: lbData } = await supabase.rpc("get_group_leaderboard", {
+            p_group_id: g.id,
+            p_sort:     "lifetime_pnl",
+          });
+          if (lbData?.ok && Array.isArray(lbData.rows)) {
+            lbData.rows.forEach((row: { user_id: string }) => {
+              groupMap[row.user_id] = { group_id: g.id, group_name: g.name };
+            });
+          }
+        })
+      );
 
       const enriched: OrgMemberWithGroup[] = (mData ?? []).map((m: any) => {
         const tu = Array.isArray(m.trader_users) ? m.trader_users[0] : m.trader_users;

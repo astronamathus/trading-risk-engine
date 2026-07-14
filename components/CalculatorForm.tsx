@@ -43,8 +43,8 @@ function SettingsIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor"
       strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="8" cy="8" r="2"/>
-      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+      <path d="M8 1.8 L12.8 4.5 L12.8 10.5 L8 13.2 L3.2 10.5 L3.2 4.5 Z" strokeLinejoin="round"/>
+      <circle cx="8" cy="7.5" r="2"/>
     </svg>
   );
 }
