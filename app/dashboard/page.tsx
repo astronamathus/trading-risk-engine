@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth }       from "@/components/AuthProvider";
 import { supabase }     from "@/lib/supabase";
-import { getTrades, activateTrade, closeTrade } from "@/lib/db/trades";
+import { getTrades, getActiveTrades, activateTrade, closeTrade } from "@/lib/db/trades";
 import type { Trade }    from "@/lib/db/trades";
 import FloatingBar       from "@/components/dashboard/FloatingBar";
 import SummaryCards      from "@/components/dashboard/SummaryCards";
@@ -12,7 +12,10 @@ import TradeHealth       from "@/components/dashboard/TradeHealth";
 import RiskPieChart      from "@/components/dashboard/RiskPieChart";
 import RiskTable         from "@/components/dashboard/RiskTable";
 
-const POLL_MS = 15 * 60 * 1000;
+const POLL_MS    = 15 * 60 * 1000;
+// Dashboard shows only the most recent trades for the charts/cards.
+// Full history is available in the Ledger page.
+const PAGE_SIZE  = 200;
 
 function RefreshIcon({ spinning }: { spinning: boolean }) {
   return (
@@ -34,6 +37,7 @@ export default function DashboardPage() {
   const [error,        setError]        = useState<string | null>(null);
   const [lastUpdated,  setLastUpdated]  = useState<Date | null>(null);
   const userIdRef = useRef<string | null>(null);
+
   async function fetchPrices(allTrades: Trade[]): Promise<Record<string, number>> {
     const monitored     = allTrades.filter(t => t.status === "OPEN" || t.status === "QUEUED");
     const uniqueTickers = [...new Set(monitored.map(t => t.ticker))];
@@ -53,13 +57,17 @@ export default function DashboardPage() {
     return map;
   }
 
+  /**
+   * Full refresh — re-fetches trade history + live prices + capital limit.
+   * Used on mount and manual refresh button.
+   */
   const refresh = useCallback(async (uid?: string) => {
     const id = uid ?? userIdRef.current;
     if (!id) return;
     setRefreshing(true);
     try {
       const [data, userRow] = await Promise.all([
-        getTrades(id),
+        getTrades(id, 0, PAGE_SIZE),
         supabase.from("trader_users").select("capital_limit").eq("id", id).single(),
       ]);
       const prices = await fetchPrices(data);
@@ -68,7 +76,7 @@ export default function DashboardPage() {
       if (userRow.data?.capital_limit) setCapitalLimit(userRow.data.capital_limit);
       setLastUpdated(new Date());
 
-      // Monitor
+      // Monitor open/queued for auto-close triggers
       const actions: Promise<void>[] = [];
       for (const trade of data) {
         const ltp = prices[trade.ticker];
@@ -86,13 +94,55 @@ export default function DashboardPage() {
       }
       if (actions.length > 0) {
         await Promise.allSettled(actions);
-        const updated = await getTrades(id);
+        const updated = await getTrades(id, 0, PAGE_SIZE);
         setTrades(updated);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setRefreshing(false);
+    }
+  }, []);
+
+  /**
+   * Scoped poll — only fetches OPEN/QUEUED rows for price monitoring.
+   * Does not re-fetch full trade history; just updates livePrices in place
+   * and reloads history only if a trade status actually changed.
+   */
+  const pollActiveTrades = useCallback(async () => {
+    const id = userIdRef.current;
+    if (!id) return;
+    try {
+      const activeTrades = await getActiveTrades(id);
+      if (activeTrades.length === 0) return;
+
+      const prices = await fetchPrices(activeTrades);
+      setLivePrices(prev => ({ ...prev, ...prices }));
+      setLastUpdated(new Date());
+
+      const actions: Promise<void>[] = [];
+      for (const trade of activeTrades) {
+        const ltp = prices[trade.ticker];
+        if (ltp === undefined) continue;
+        if (trade.status === "QUEUED" && trade.entry_target !== null) {
+          if (ltp >= trade.entry_target) actions.push(activateTrade(trade.id));
+        }
+        if (trade.status === "OPEN") {
+          const target = trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
+          if (ltp >= target)
+            actions.push(closeTrade(trade.id, "TARGET_HIT", ltp, trade.quantity, trade.entry_price));
+          else if (ltp <= trade.stop_loss)
+            actions.push(closeTrade(trade.id, "STOPPED", ltp, trade.quantity, trade.entry_price));
+        }
+      }
+      if (actions.length > 0) {
+        await Promise.allSettled(actions);
+        // Status changed — reload history so dashboard charts stay accurate
+        const updated = await getTrades(id, 0, PAGE_SIZE);
+        setTrades(updated);
+      }
+    } catch (err) {
+      console.error("Poll error:", err);
     }
   }, []);
 
@@ -105,10 +155,11 @@ export default function DashboardPage() {
     refresh(user.id).finally(() => setLoading(false));
   }, [user, authLoading, refresh]);
 
+  // ── 15-min poll — scoped to active trades only ────────────
   useEffect(() => {
-    const id = setInterval(() => refresh(), POLL_MS);
+    const id = setInterval(() => pollActiveTrades(), POLL_MS);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [pollActiveTrades]);
 
   if (loading) return (
     <main className="flex items-center justify-center min-h-[60vh] gap-3 text-slate-400 dark:text-slate-500">

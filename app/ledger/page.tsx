@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import Ledger from "@/components/Ledger";
-import { getTrades, activateTrade, closeTrade } from "@/lib/db/trades";
+import { getTrades, getActiveTrades, activateTrade, closeTrade } from "@/lib/db/trades";
 import type { Trade } from "@/lib/db/trades";
 
 const POLL_INTERVAL_MS = 15 * 60 * 1000;
+const PAGE_SIZE = 50;
 
 function ClockIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -27,6 +28,10 @@ export default function LedgerPage() {
   const [livePrices,    setLivePrices]    = useState<Record<string, number>>({});
   const [pricesLoading, setPricesLoading] = useState(false);
   const [lastChecked,   setLastChecked]   = useState<Date | null>(null);
+  // Pagination state
+  const [page,          setPage]          = useState(0);
+  const [hasMore,       setHasMore]       = useState(true);
+  const [loadingMore,   setLoadingMore]   = useState(false);
 
   const userIdRef = useRef<string | null>(null);
   const tradesRef = useRef<Trade[]>([]);
@@ -89,13 +94,20 @@ export default function LedgerPage() {
     return false;
   }, []);
 
+  /**
+   * Full refresh: re-fetches page 0 of history + live prices for active trades.
+   * Called on mount, manual refresh button, and after a trade is closed.
+   */
   const refresh = useCallback(async (uid?: string) => {
     const id = uid ?? userIdRef.current;
     if (!id) return;
 
     try {
-      const data = await getTrades(id);
+      // Re-fetch only page 0 of the full history (recent trades)
+      const data = await getTrades(id, 0, PAGE_SIZE);
       setTrades(data);
+      setPage(0);
+      setHasMore(data.length === PAGE_SIZE);
       tradesRef.current = data;
 
       setPricesLoading(true);
@@ -105,8 +117,9 @@ export default function LedgerPage() {
 
       const changed = await runMonitor(data, prices);
       if (changed) {
-        const updated = await getTrades(id);
+        const updated = await getTrades(id, 0, PAGE_SIZE);
         setTrades(updated);
+        setHasMore(updated.length === PAGE_SIZE);
       }
     } catch (err) {
       console.error("Refresh error:", err);
@@ -115,9 +128,62 @@ export default function LedgerPage() {
     }
   }, [runMonitor]);
 
+  /**
+   * Poll handler: only fetches OPEN/QUEUED trades for price monitoring.
+   * Does NOT re-fetch the full history — closed trades can't change prices.
+   * After any state changes, reloads page 0 of history so the ledger reflects
+   * the new statuses (e.g. OPEN → STOPPED).
+   */
+  const pollActiveTrades = useCallback(async () => {
+    const id = userIdRef.current;
+    if (!id) return;
+
+    try {
+      const activeTrades = await getActiveTrades(id);
+      if (activeTrades.length === 0) return;
+
+      setPricesLoading(true);
+      const prices = await fetchLivePrices(activeTrades);
+      setLivePrices(prev => ({ ...prev, ...prices }));
+      setLastChecked(new Date());
+
+      const changed = await runMonitor(activeTrades, prices);
+      if (changed) {
+        // A trade changed status — reload visible history so UI stays correct
+        const updated = await getTrades(id, 0, PAGE_SIZE);
+        setTrades(updated);
+        setPage(0);
+        setHasMore(updated.length === PAGE_SIZE);
+      }
+    } catch (err) {
+      console.error("Poll error:", err);
+    } finally {
+      setPricesLoading(false);
+    }
+  }, [runMonitor]);
+
+  /** Load the next page of closed trades and append to the list. */
+  const loadMore = useCallback(async () => {
+    const id = userIdRef.current;
+    if (!id || loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data     = await getTrades(id, nextPage, PAGE_SIZE);
+      setTrades(prev => [...prev, ...data]);
+      setPage(nextPage);
+      setHasMore(data.length === PAGE_SIZE);
+    } catch (err) {
+      console.error("Load more error:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [page, hasMore, loadingMore]);
+
   // ── Bootstrap: wait for auth, then load trades ────────────
   useEffect(() => {
-    if (authLoading) return;           // wait for auth to resolve
+    if (authLoading) return;
     if (!user) {
       setLoading(false);
       setError("Please sign in to view your ledger.");
@@ -127,11 +193,11 @@ export default function LedgerPage() {
     refresh(user.id).finally(() => setLoading(false));
   }, [user, authLoading, refresh]);
 
-  // ── 15-min polling ────────────────────────────────────────
+  // ── 15-min polling — scoped to active trades only ─────────
   useEffect(() => {
-    const interval = setInterval(() => refresh(), POLL_INTERVAL_MS);
+    const interval = setInterval(() => pollActiveTrades(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [pollActiveTrades]);
 
   const open      = trades.filter(t => t.status === "OPEN").length;
   const queued    = trades.filter(t => t.status === "QUEUED").length;
@@ -196,12 +262,40 @@ export default function LedgerPage() {
               {error}
             </div>
           ) : (
-            <Ledger
-              trades={trades}
-              livePrices={livePrices}
-              pricesLoading={pricesLoading}
-              onRefresh={() => refresh()}
-            />
+            <>
+              <Ledger
+                trades={trades}
+                livePrices={livePrices}
+                pricesLoading={pricesLoading}
+                onRefresh={() => refresh()}
+              />
+
+              {/* Load-more pagination */}
+              {hasMore && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600
+                      text-xs font-medium text-slate-400 dark:text-slate-400
+                      hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors
+                      disabled:opacity-40 flex items-center gap-2"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <svg className="animate-spin h-3.5 w-3.5 text-blue-400" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                        Loading…
+                      </>
+                    ) : (
+                      `Load older trades`
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
 
