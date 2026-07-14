@@ -25,11 +25,12 @@ export interface OrgInvite {
 }
 
 export interface OrgMember {
-  id:           string;
-  display_name: string | null;
-  avatar_url:   string | null;
-  org_role:     "owner" | "admin" | "member";
-  joined_at:    string;
+  id:            string;
+  display_name:  string | null;
+  avatar_url:    string | null;
+  org_role:      "owner" | "admin" | "member";
+  joined_at:     string;
+  capital_limit: number;
 }
 
 // ── Org creation ─────────────────────────────────────────────
@@ -225,6 +226,20 @@ export async function demoteMember(memberId: string, orgId: string): Promise<voi
   });
   if (error) throw new Error(error.message);
   if (!data?.ok) throw new Error(data?.error ?? "Failed to demote member");
+}
+
+export async function setUserCapitalLimit(
+  orgId:    string,
+  memberId: string,
+  capital:  number,
+): Promise<void> {
+  const { data, error } = await supabase.rpc("set_user_capital_limit", {
+    p_org_id:    orgId,
+    p_member_id: memberId,
+    p_capital:   capital,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to set capital limit");
 }
 
 export async function toggleLeaderboardVisibility(

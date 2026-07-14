@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth }       from "@/components/AuthProvider";
+import { supabase }     from "@/lib/supabase";
 import { getTrades, activateTrade, closeTrade } from "@/lib/db/trades";
 import type { Trade }    from "@/lib/db/trades";
 import FloatingBar       from "@/components/dashboard/FloatingBar";
@@ -25,12 +26,13 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 }
 
 export default function DashboardPage() {
-  const [trades,      setTrades]      = useState<Trade[]>([]);
-  const [livePrices,  setLivePrices]  = useState<Record<string, number>>({});
-  const [loading,     setLoading]     = useState(true);
-  const [refreshing,  setRefreshing]  = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [trades,       setTrades]       = useState<Trade[]>([]);
+  const [livePrices,   setLivePrices]   = useState<Record<string, number>>({});
+  const [capitalLimit, setCapitalLimit] = useState<number | undefined>(undefined);
+  const [loading,      setLoading]      = useState(true);
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+  const [lastUpdated,  setLastUpdated]  = useState<Date | null>(null);
   const userIdRef = useRef<string | null>(null);
   async function fetchPrices(allTrades: Trade[]): Promise<Record<string, number>> {
     const monitored     = allTrades.filter(t => t.status === "OPEN" || t.status === "QUEUED");
@@ -56,10 +58,14 @@ export default function DashboardPage() {
     if (!id) return;
     setRefreshing(true);
     try {
-      const data   = await getTrades(id);
+      const [data, userRow] = await Promise.all([
+        getTrades(id),
+        supabase.from("trader_users").select("capital_limit").eq("id", id).single(),
+      ]);
       const prices = await fetchPrices(data);
       setTrades(data);
       setLivePrices(prices);
+      if (userRow.data?.capital_limit) setCapitalLimit(userRow.data.capital_limit);
       setLastUpdated(new Date());
 
       // Monitor
@@ -129,7 +135,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-5xl flex flex-col gap-6">
 
         {/* Floating bar */}
-        <FloatingBar trades={trades} livePrices={livePrices}/>
+        <FloatingBar trades={trades} livePrices={livePrices} capitalLimit={capitalLimit}/>
 
         {/* Header */}
         <div className="flex items-center justify-between pt-1">

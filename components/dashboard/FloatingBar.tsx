@@ -3,8 +3,9 @@
 import { Trade } from "@/lib/db/trades";
 
 interface FloatingBarProps {
-  trades:     Trade[];
-  livePrices: Record<string, number>;
+  trades:        Trade[];
+  livePrices:    Record<string, number>;
+  capitalLimit?: number;  // from trader_users.capital_limit, passed by dashboard
 }
 
 function formatINR(v: number) {
@@ -34,7 +35,7 @@ function Stat({
   );
 }
 
-export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
+export default function FloatingBar({ trades, livePrices, capitalLimit }: FloatingBarProps) {
   const open   = trades.filter(t => t.status === "OPEN");
   const closed = trades.filter(
     t => t.status === "CLOSED" || t.status === "STOPPED" || t.status === "TARGET_HIT"
@@ -61,9 +62,15 @@ export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
   // Total capital at risk across open positions
   const totalRisk = open.reduce((s, t) => s + (t.risk_amount ?? 0), 0);
 
-  // Portfolio risk % = total risk / capital (use first trade's capital as proxy)
-  const capital     = open.find(t => t.capital)?.capital ?? 100000;
+  // Portfolio risk % = total risk / capital
+  // Prefer capitalLimit from org (admin-set); fall back to first trade's capital
+  const capital     = capitalLimit ?? open.find(t => t.capital)?.capital ?? 100000;
   const portfolioRiskPct = capital > 0 ? (totalRisk / capital) * 100 : 0;
+
+  // Remaining capital = limit minus current open position cost
+  const openCost       = open.reduce((s, t) => s + t.entry_price * t.quantity, 0);
+  const remainingCap   = capital - openCost;
+  const remainingPct   = capital > 0 ? (remainingCap / capital) * 100 : 0;
 
   // Average open R: for each open trade, R = unrealised PnL / risk_amount
   const rValues = open
@@ -117,6 +124,16 @@ export default function FloatingBar({ trades, livePrices }: FloatingBarProps) {
           label="Open Positions"
           value={`${open.length}`}
           sub={open.length === 1 ? "position" : "positions"}
+        />
+        <Stat
+          label="Remaining Capital"
+          value={formatINR(remainingCap)}
+          sub={`${remainingPct.toFixed(1)}% of ${formatINR(capital)}`}
+          colour={
+            remainingPct < 20 ? "text-red-400"
+            : remainingPct < 50 ? "text-amber-400"
+            : "text-slate-900 dark:text-slate-100"
+          }
         />
         <Stat
           label="Avg Open R"

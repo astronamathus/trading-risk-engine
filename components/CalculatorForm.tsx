@@ -64,6 +64,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const [showSettings, setShowSettings] = useState(false);
   const [capital,      setCapital]      = useState("100000");
   const [riskPercent,  setRiskPercent]  = useState("1");
+  const [rrRatio,      setRrRatio]      = useState("2");
   const [ltp,        setLtp]        = useState<number | null>(null);
   const [ltpLoading, setLtpLoading] = useState(false);
   const [ltpError,   setLtpError]   = useState<string | null>(null);
@@ -150,6 +151,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     onSubmit({
       ticker: ticker.trim(), stopLoss: parseFloat(stopLoss),
       capital: parseFloat(capital), riskPercent: parseFloat(riskPercent),
+      rrRatio: parseFloat(rrRatio),
       entryPrice: parseFloat(entryPrice),
     });
   }
@@ -195,7 +197,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                 ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20"
                 : "border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
             }`}
-            title="Risk settings"
+            title="Trade settings"
           >
             <SettingsIcon/>
           </button>
@@ -205,14 +207,8 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
               border-slate-200 dark:border-slate-600
               bg-white dark:bg-slate-900 shadow-xl p-4 flex flex-col gap-4">
               <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">
-                Risk Settings
+                Trade Settings
               </p>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Total Capital (₹)</label>
-                <input type="number" value={capital} onChange={e => setCapital(e.target.value)}
-                  className={inputClass} placeholder="e.g. 100000" min="1" step="1000"/>
-                <p className="text-xs text-slate-400 dark:text-slate-600">Your total trading account size</p>
-              </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Risk Percentage (%)</label>
                 <div className="relative">
@@ -221,6 +217,15 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">%</span>
                 </div>
                 <p className="text-xs text-slate-400 dark:text-slate-600">Max % of capital to risk per trade</p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">R:R Ratio</label>
+                <div className="relative">
+                  <input type="number" value={rrRatio} onChange={e => setRrRatio(e.target.value)}
+                    className={inputClass + " pr-12"} placeholder="e.g. 2" min="0.1" step="0.1"/>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">: 1</span>
+                </div>
+                <p className="text-xs text-slate-400 dark:text-slate-600">Minimum reward vs risk per trade</p>
               </div>
               <button type="button" onClick={() => setShowSettings(false)}
                 className="w-full rounded-lg bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-xs

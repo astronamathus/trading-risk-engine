@@ -27,8 +27,6 @@ const NAV_LINKS = [
 
 const ORG_LINKS = [
   { href: "/leaderboard",  label: "Leaderboard" },
-  { href: "/org/admin",    label: "Team"         },
-  { href: "/org/groups",   label: "Groups"       },
   { href: "/org/settings", label: "Settings"     },
 ];
 

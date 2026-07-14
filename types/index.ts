@@ -12,6 +12,7 @@ export interface CalculatorInputs {
   stopLoss:    number;
   capital:     number;
   riskPercent: number;
+  rrRatio:     number;  // reward:risk ratio, e.g. 2 means target = entry + 2 × risk
   entryPrice:  number;  // user-set entry, may differ from live LTP
 }
 
