@@ -1,4 +1,3 @@
-
 ## Repository
 **GitHub:** `https://github.com/astronamathus/trading-risk-engine`
 **Deployment:** `https://trading-risk-engine.vercel.app`
@@ -64,9 +63,9 @@ trader_users_admin_visible(uuid)    -- security-definer fn for admin member read
 | `update_own_trade(trade_id, qty, sl, target, notes)` | User edits allowed fields only, audited |
 | `admin_soft_delete_trade(trade_id, org_id, reason)` | Admin soft-deletes trade, audited |
 | `get_org_leaderboard(org_id, sort)` | Ranks only to members, full metrics to admins |
-| `get_group_leaderboard(group_id, sort)` | Same but scoped to a group |
+| `get_group_leaderboard(group_id, sort)` | Same but scoped to a group. Also used by org/settings to resolve group membership (returns rows with user_id) |
 | `get_org_members_with_profiles(org_id)` | Members with display_name/avatar (no admin API) |
-| `get_org_groups(org_id)` | Groups visible to caller |
+| `get_org_groups(org_id)` | Groups visible to caller. Returns `is_my_group` for the calling user only — does NOT return a full user→group map |
 | `create_group(org_id, name)` | Admin creates a group |
 | `rename_group(group_id, new_name)` | Admin renames a group |
 | `delete_group(group_id)` | Admin deletes group, cascades members |
@@ -75,6 +74,29 @@ trader_users_admin_visible(uuid)    -- security-definer fn for admin member read
 | `toggle_leaderboard_visibility(org_id, show)` | User opts in/out of leaderboard |
 | `rename_organisation(org_id, new_name)` | Owner or admin renames org |
 | `delete_organisation(org_id)` | Owner only — resets all members to indie, cascades |
+
+### ⚠️ Group membership reads — important pattern
+**Never query `org_group_members` directly from the client.** Even though the table has no RLS, direct client queries return `[]` in practice. Always resolve group membership via `get_group_leaderboard`:
+
+```typescript
+// ✅ Correct — used in org/settings/page.tsx
+await Promise.all(
+  groupList.map(async (g) => {
+    const { data } = await supabase.rpc("get_group_leaderboard", {
+      p_group_id: g.id,
+      p_sort: "lifetime_pnl",
+    });
+    if (data?.ok && Array.isArray(data.rows)) {
+      data.rows.forEach((row) => {
+        groupMap[row.user_id] = { group_id: g.id, group_name: g.name };
+      });
+    }
+  })
+);
+
+// ❌ Wrong — returns [] silently
+await supabase.from("org_group_members").select("user_id, group_id").eq("org_id", orgId);
+```
 
 ---
 
@@ -87,6 +109,19 @@ trader_users_admin_visible(uuid)    -- security-definer fn for admin member read
 6. `006_org_delete_and_rename.sql` — `delete_organisation` and `rename_organisation` RPCs
 7. `007_leaderboard_optin.sql` — `on_leaderboard` column, `toggle_leaderboard_visibility` RPC
 8. `008_groups.sql` — `org_groups`, `org_group_members` tables + all group RPCs
+
+### Recommended indexes (not yet applied — add when ledger grows)
+```sql
+-- Most important: every query filters by user_id
+CREATE INDEX idx_trades_user_id ON trades(user_id);
+
+-- Speeds up the soft-delete filter (deleted_at IS NULL)
+CREATE INDEX idx_trades_user_active ON trades(user_id, deleted_at)
+  WHERE deleted_at IS NULL;
+
+-- Speeds up status filtering (OPEN/QUEUED for live price fetching)
+CREATE INDEX idx_trades_user_status ON trades(user_id, status);
+```
 
 ---
 
@@ -154,13 +189,14 @@ Multi-step, `useSearchParams` wrapped in `<Suspense>`:
 | `/auth/callback` | OAuth callback | No |
 | `/onboarding` | First-login user type selection | Yes |
 | `/org/new` | Create organisation | Yes (unboarded) |
-| `/org/settings` | Invite generation, member management, danger zone | `org_admin` |
+| `/org/settings` | Invite generation, member management, groups tab, danger zone | `org_admin` |
 | `/org/admin` | Team overview, per-member trade tables, soft-delete | `org_admin` |
-| `/org/groups` | Create/rename/delete groups, assign members | `org_admin` |
 | `/leaderboard` | Group-scoped leaderboard | Yes (org member) |
 | `/join/[code]` | Invite acceptance | Yes |
 
 **Note:** `app/join/[code]/page.tsx` must use square brackets for the dynamic route.
+
+**Note:** `/org/groups` has been merged into `/org/settings` (Groups tab). The standalone groups page is deprecated.
 
 ---
 
@@ -172,7 +208,7 @@ Multi-step, `useSearchParams` wrapped in `<Suspense>`:
 | `ThemeProvider` | `light`/`dark`/`system` — initialises from localStorage synchronously to prevent flash. Default: `system` |
 | `NavBar` | Theme picker in dropdown, org links for admins, "Join org" for non-admins |
 | `Ledger` | Full trade table — delete removed for regular users |
-| `CalculatorForm` | Ticker search, LTP fetch, entry/SL inputs |
+| `CalculatorForm` | Ticker search, LTP fetch, entry/SL inputs. Settings icon is a rounded hexagon + inner circle (inline SVG, `SettingsIcon` component) |
 | `ResultsPanel` | Position size output with capital limit controls |
 | `FloatingBar` | Sticky dashboard stats: portfolio value, lifetime P&L, risk %, avg R |
 | `SummaryCards` | 4 cards: Total P&L, Win Rate, Avg R, Portfolio counts |
@@ -236,9 +272,19 @@ interface Trade {
 
 ## Groups
 - One group per member per org (`unique(user_id, org_id)` on `org_group_members`)
-- Admins create/rename/delete groups, assign members via `/org/groups`
+- Admins create/rename/delete groups, assign members via the **Groups tab in `/org/settings`**
 - Members auto-land on their own group's leaderboard
 - No groups = leaderboard shows "Create groups" prompt for admins
+- Group membership for the settings page is resolved via `get_group_leaderboard` RPC (see ⚠️ above)
+
+---
+
+## Performance notes
+`getTrades` currently fetches all trades with no limit. When the ledger grows:
+1. Add the indexes above first (biggest gain, zero code change)
+2. Add `.range(from, from + pageSize - 1)` to `getTrades` for pagination
+3. The 15-min poll in `app/ledger/page.tsx` should eventually only re-fetch `OPEN`/`QUEUED` trades, not the full history
+4. `fetchLivePrices` already deduplicates by ticker — no change needed there
 
 ---
 
@@ -261,7 +307,9 @@ delete from trader_users      where id      = 'USER_ID';
 - `trader_users` and `trades` have RLS disabled (demo data workaround)
 - `org_id` / `org_role` on `trader_users` are legacy — source of truth is `org_memberships`. RPCs keep them in sync. Safe to drop once nothing reads them directly.
 - `org/setup/page.tsx` is superseded by `org/new/page.tsx`
+- `org/groups/page.tsx` is superseded by the Groups tab in `org/settings/page.tsx`
 - Light mode: all pages have been patched with `dark:` variants. If any new components are added, use `bg-white dark:bg-slate-800/50` pattern throughout.
+- `getTrades` has no pagination yet — will become slow at large trade counts (see Performance notes)
 
 ---
 
@@ -281,3 +329,4 @@ Service role key is NOT in the codebase. All privileged operations go through se
 - Admin edit trade fields UI (`admin_edit_trade` RPC already exists in migration 001, no UI yet)
 - Org invite revocation UI in settings
 - Full audit log viewer for admins
+- Pagination for `getTrades` + ledger UI (see Performance notes)
