@@ -123,10 +123,10 @@ export default function NavBar() {
   const navBg     = "bg-white dark:bg-[#0d1117]";
   const navBorder = "border-slate-200 dark:border-slate-800";
   const brandTxt  = "text-slate-700 dark:text-slate-300";
-  const linkBase  = "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800";
+  const linkBase  = "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-100 dark:hover:bg-slate-800";
   const linkActive = "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100";
   const dropBg    = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700";
-  const dropItem  = "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800";
+  const dropItem  = "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-100 dark:hover:bg-slate-800";
   const divider   = "border-slate-100 dark:border-slate-800";
 
   return (
@@ -274,7 +274,7 @@ export default function NavBar() {
                             text-xs transition-colors ${
                             active
                               ? "bg-blue-600 text-white"
-                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
                           }`}
                         >
                           <Icon className="w-3.5 h-3.5"/>

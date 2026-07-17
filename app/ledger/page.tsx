@@ -3,11 +3,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import Ledger from "@/components/Ledger";
-import { getTrades, getActiveTrades, activateTrade, closeTrade } from "@/lib/db/trades";
+import { getTrades, activateTrade, closeTrade } from "@/lib/db/trades";
 import type { Trade } from "@/lib/db/trades";
 
 const POLL_INTERVAL_MS = 15 * 60 * 1000;
-const PAGE_SIZE = 50;
 
 function ClockIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -28,10 +27,6 @@ export default function LedgerPage() {
   const [livePrices,    setLivePrices]    = useState<Record<string, number>>({});
   const [pricesLoading, setPricesLoading] = useState(false);
   const [lastChecked,   setLastChecked]   = useState<Date | null>(null);
-  // Pagination state
-  const [page,          setPage]          = useState(0);
-  const [hasMore,       setHasMore]       = useState(true);
-  const [loadingMore,   setLoadingMore]   = useState(false);
 
   const userIdRef = useRef<string | null>(null);
   const tradesRef = useRef<Trade[]>([]);
@@ -94,20 +89,13 @@ export default function LedgerPage() {
     return false;
   }, []);
 
-  /**
-   * Full refresh: re-fetches page 0 of history + live prices for active trades.
-   * Called on mount, manual refresh button, and after a trade is closed.
-   */
   const refresh = useCallback(async (uid?: string) => {
     const id = uid ?? userIdRef.current;
     if (!id) return;
 
     try {
-      // Re-fetch only page 0 of the full history (recent trades)
-      const data = await getTrades(id, 0, PAGE_SIZE);
+      const data = await getTrades(id);
       setTrades(data);
-      setPage(0);
-      setHasMore(data.length === PAGE_SIZE);
       tradesRef.current = data;
 
       setPricesLoading(true);
@@ -117,9 +105,8 @@ export default function LedgerPage() {
 
       const changed = await runMonitor(data, prices);
       if (changed) {
-        const updated = await getTrades(id, 0, PAGE_SIZE);
+        const updated = await getTrades(id);
         setTrades(updated);
-        setHasMore(updated.length === PAGE_SIZE);
       }
     } catch (err) {
       console.error("Refresh error:", err);
@@ -128,62 +115,9 @@ export default function LedgerPage() {
     }
   }, [runMonitor]);
 
-  /**
-   * Poll handler: only fetches OPEN/QUEUED trades for price monitoring.
-   * Does NOT re-fetch the full history — closed trades can't change prices.
-   * After any state changes, reloads page 0 of history so the ledger reflects
-   * the new statuses (e.g. OPEN → STOPPED).
-   */
-  const pollActiveTrades = useCallback(async () => {
-    const id = userIdRef.current;
-    if (!id) return;
-
-    try {
-      const activeTrades = await getActiveTrades(id);
-      if (activeTrades.length === 0) return;
-
-      setPricesLoading(true);
-      const prices = await fetchLivePrices(activeTrades);
-      setLivePrices(prev => ({ ...prev, ...prices }));
-      setLastChecked(new Date());
-
-      const changed = await runMonitor(activeTrades, prices);
-      if (changed) {
-        // A trade changed status — reload visible history so UI stays correct
-        const updated = await getTrades(id, 0, PAGE_SIZE);
-        setTrades(updated);
-        setPage(0);
-        setHasMore(updated.length === PAGE_SIZE);
-      }
-    } catch (err) {
-      console.error("Poll error:", err);
-    } finally {
-      setPricesLoading(false);
-    }
-  }, [runMonitor]);
-
-  /** Load the next page of closed trades and append to the list. */
-  const loadMore = useCallback(async () => {
-    const id = userIdRef.current;
-    if (!id || loadingMore || !hasMore) return;
-
-    setLoadingMore(true);
-    try {
-      const nextPage = page + 1;
-      const data     = await getTrades(id, nextPage, PAGE_SIZE);
-      setTrades(prev => [...prev, ...data]);
-      setPage(nextPage);
-      setHasMore(data.length === PAGE_SIZE);
-    } catch (err) {
-      console.error("Load more error:", err);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [page, hasMore, loadingMore]);
-
   // ── Bootstrap: wait for auth, then load trades ────────────
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading) return;           // wait for auth to resolve
     if (!user) {
       setLoading(false);
       setError("Please sign in to view your ledger.");
@@ -193,17 +127,21 @@ export default function LedgerPage() {
     refresh(user.id).finally(() => setLoading(false));
   }, [user, authLoading, refresh]);
 
-  // ── 15-min polling — scoped to active trades only ─────────
+  // ── 15-min polling ────────────────────────────────────────
   useEffect(() => {
-    const interval = setInterval(() => pollActiveTrades(), POLL_INTERVAL_MS);
+    const interval = setInterval(() => refresh(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [pollActiveTrades]);
+  }, [refresh]);
+
+  const [filter, setFilter] = useState<Trade["status"] | "ALL">("ALL");
 
   const open      = trades.filter(t => t.status === "OPEN").length;
   const queued    = trades.filter(t => t.status === "QUEUED").length;
   const closed    = trades.filter(t => t.status === "CLOSED").length;
   const stopped   = trades.filter(t => t.status === "STOPPED").length;
   const targetHit = trades.filter(t => t.status === "TARGET_HIT").length;
+
+  const filteredTrades = filter === "ALL" ? trades : trades.filter(t => t.status === filter);
 
   return (
     <main className="px-4 py-10 sm:px-6 lg:px-8">
@@ -218,25 +156,62 @@ export default function LedgerPage() {
 
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex gap-2 flex-wrap">
-            <span className="text-xs px-3 py-1 rounded-full border border-emerald-700
-              text-emerald-400 bg-emerald-900/20">{open} Open</span>
-            {queued > 0 && (
-              <span className="text-xs px-3 py-1 rounded-full border border-amber-700
-                text-amber-400 bg-amber-900/20 flex items-center gap-1">
-                <ClockIcon className="w-3 h-3"/>
-                {queued} Queued
-              </span>
-            )}
-            <span className="text-xs px-3 py-1 rounded-full border border-slate-300 dark:border-slate-600
-              text-slate-400 dark:text-slate-400 bg-slate-100/40 dark:bg-slate-800/40" title="Manually closed by you">
-              {closed} Closed
-            </span>
-            <span className="text-xs px-3 py-1 rounded-full border border-red-800
-              text-red-400 bg-red-900/20">{stopped} SL Hit</span>
-            {targetHit > 0 && (
-              <span className="text-xs px-3 py-1 rounded-full border border-blue-700
-                text-blue-400 bg-blue-900/20">{targetHit} TG Hit</span>
-            )}
+            {(["ALL", "OPEN", "QUEUED", "CLOSED", "STOPPED", "TARGET_HIT"] as const)
+              .filter(s => {
+                if (s === "ALL")        return true;
+                if (s === "OPEN")       return open > 0;
+                if (s === "QUEUED")     return queued > 0;
+                if (s === "CLOSED")     return closed > 0;
+                if (s === "STOPPED")    return stopped > 0;
+                if (s === "TARGET_HIT") return targetHit > 0;
+              })
+              .map(s => {
+                const active = filter === s;
+                const base   = "text-xs px-3 py-1 rounded-full border font-medium transition-all cursor-pointer select-none";
+
+                const styles: Record<string, string> = {
+                  ALL:        active
+                    ? "border-slate-500 dark:border-slate-400 text-slate-900 dark:text-white bg-slate-200 dark:bg-slate-700"
+                    : "border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 bg-white dark:bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800",
+                  OPEN:       active
+                    ? "border-emerald-500 dark:border-emerald-400 text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40"
+                    : "border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40",
+                  QUEUED:     active
+                    ? "border-amber-500 dark:border-amber-400 text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40"
+                    : "border-amber-400 dark:border-amber-700 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40",
+                  CLOSED:     active
+                    ? "border-slate-500 dark:border-slate-400 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700"
+                    : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-700",
+                  STOPPED:    active
+                    ? "border-red-500 dark:border-red-500 text-red-800 dark:text-red-300 bg-red-100 dark:bg-red-900/40"
+                    : "border-red-400 dark:border-red-800 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40",
+                  TARGET_HIT: active
+                    ? "border-blue-500 dark:border-blue-400 text-blue-800 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40"
+                    : "border-blue-400 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40",
+                };
+
+                const counts: Record<string, string> = {
+                  ALL:        `All (${trades.length})`,
+                  OPEN:       `${open} Open`,
+                  QUEUED:     `${queued} Queued`,
+                  CLOSED:     `${closed} Closed`,
+                  STOPPED:    `${stopped} SL Hit`,
+                  TARGET_HIT: `${targetHit} TG Hit`,
+                };
+
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setFilter(f => f === s ? "ALL" : s)}
+                    className={`${base} ${styles[s]}`}
+                  >
+                    {s === "QUEUED" && (
+                      <ClockIcon className="w-3 h-3 inline-block mr-1 -mt-0.5"/>
+                    )}
+                    {counts[s]}
+                  </button>
+                );
+              })}
           </div>
           {lastChecked && (
             <span className="text-xs text-slate-400 dark:text-slate-600 flex items-center gap-1">
@@ -262,40 +237,13 @@ export default function LedgerPage() {
               {error}
             </div>
           ) : (
-            <>
-              <Ledger
-                trades={trades}
-                livePrices={livePrices}
-                pricesLoading={pricesLoading}
-                onRefresh={() => refresh()}
-              />
-
-              {/* Load-more pagination */}
-              {hasMore && (
-                <div className="mt-4 flex justify-center">
-                  <button
-                    onClick={loadMore}
-                    disabled={loadingMore}
-                    className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600
-                      text-xs font-medium text-slate-400 dark:text-slate-400
-                      hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors
-                      disabled:opacity-40 flex items-center gap-2"
-                  >
-                    {loadingMore ? (
-                      <>
-                        <svg className="animate-spin h-3.5 w-3.5 text-blue-400" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                        </svg>
-                        Loading…
-                      </>
-                    ) : (
-                      `Load older trades`
-                    )}
-                  </button>
-                </div>
-              )}
-            </>
+            <Ledger
+              trades={filteredTrades}
+              livePrices={livePrices}
+              pricesLoading={pricesLoading}
+              onRefresh={() => refresh()}
+              emptyMessage={filter !== "ALL" ? `No ${filter.replace("_", " ").toLowerCase()} trades.` : undefined}
+            />
           )}
         </section>
 

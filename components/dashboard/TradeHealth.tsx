@@ -59,9 +59,9 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
     .slice(0, 8);
 
   const STATUS_STYLE: Record<string, string> = {
-    TARGET_HIT: "border-blue-700   text-blue-400   bg-blue-900/20",
-    CLOSED:     "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-400  bg-slate-100/40 dark:bg-slate-800/40",
-    STOPPED:    "border-red-800    text-red-400    bg-red-900/20",
+    TARGET_HIT: "border-blue-400 dark:border-blue-700     text-blue-700 dark:text-blue-400     bg-blue-100/60 dark:bg-blue-900/20",
+    CLOSED:     "border-slate-300 dark:border-slate-600   text-slate-600 dark:text-slate-400   bg-slate-100/60 dark:bg-slate-800/40",
+    STOPPED:    "border-red-400 dark:border-red-800       text-red-700 dark:text-red-400       bg-red-100/60 dark:bg-red-900/20",
   };
   const STATUS_LABEL: Record<string, string> = {
     TARGET_HIT: "TG HIT", CLOSED: "CLOSED", STOPPED: "SL HIT",
@@ -120,10 +120,10 @@ export default function TradeHealth({ trades, livePrices }: TradeHealthProps) {
         ) : (
           <div className="flex flex-col gap-3">
             {[
-              { label: "At Target", items: atTarget, dot: "bg-blue-500",    badge: "border-blue-800 text-blue-400 bg-blue-900/20" },
-              { label: "Winning",   items: winning,  dot: "bg-emerald-500", badge: "border-emerald-800 text-emerald-400 bg-emerald-900/20" },
-              { label: "Near Stop", items: nearStop, dot: "bg-amber-500",   badge: "border-amber-800 text-amber-400 bg-amber-900/20" },
-              { label: "Losing",    items: losing,   dot: "bg-red-500",     badge: "border-red-800 text-red-400 bg-red-900/20" },
+              { label: "At Target", items: atTarget, dot: "bg-blue-500",    badge: "border-blue-400 dark:border-blue-700   text-blue-700 dark:text-blue-400   bg-blue-100/60 dark:bg-blue-900/20" },
+              { label: "Winning",   items: winning,  dot: "bg-emerald-500", badge: "border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/20" },
+              { label: "Near Stop", items: nearStop, dot: "bg-amber-500",   badge: "border-amber-400 dark:border-amber-700   text-amber-700 dark:text-amber-400   bg-amber-100/60 dark:bg-amber-900/20" },
+              { label: "Losing",    items: losing,   dot: "bg-red-500",     badge: "border-red-400 dark:border-red-700     text-red-700 dark:text-red-400     bg-red-100/60 dark:bg-red-900/20" },
             ].map(row => (
               <div key={row.label} className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">

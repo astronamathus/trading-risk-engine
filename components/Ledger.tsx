@@ -8,6 +8,7 @@ interface LedgerProps {
   livePrices:    Record<string, number>;
   pricesLoading: boolean;
   onRefresh:     () => void;
+  emptyMessage?: string;
 }
 
 type PnlMode = "value" | "percent";
@@ -20,11 +21,11 @@ function formatINR(v: number) {
 
 function StatusBadge({ status }: { status: Trade["status"] }) {
   const styles: Record<Trade["status"], string> = {
-    QUEUED:     "border-amber-700  text-amber-400  bg-amber-900/20",
-    OPEN:       "border-emerald-700 text-emerald-400 bg-emerald-900/20",
-    CLOSED:     "border-slate-300 dark:border-slate-600  text-slate-400 dark:text-slate-400  bg-slate-100/40 dark:bg-slate-800/40",
-    STOPPED:    "border-red-800    text-red-400    bg-red-900/20",
-    TARGET_HIT: "border-blue-600   text-blue-400   bg-blue-900/20",
+    QUEUED:     "border-amber-400 dark:border-amber-700   text-amber-700 dark:text-amber-400   bg-amber-100/60 dark:bg-amber-900/20",
+    OPEN:       "border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/20",
+    CLOSED:     "border-slate-300 dark:border-slate-600     text-slate-600 dark:text-slate-400     bg-slate-100/60 dark:bg-slate-800/40",
+    STOPPED:    "border-red-400 dark:border-red-800         text-red-700 dark:text-red-400         bg-red-100/60 dark:bg-red-900/20",
+    TARGET_HIT: "border-blue-400 dark:border-blue-700       text-blue-700 dark:text-blue-400       bg-blue-100/60 dark:bg-blue-900/20",
   };
   const labels: Record<Trade["status"], string> = {
     QUEUED: "QUEUED", OPEN: "OPEN", CLOSED: "CLOSED",
@@ -39,9 +40,9 @@ function StatusBadge({ status }: { status: Trade["status"] }) {
 
 function RiskBadge({ riskPct }: { riskPct: number }) {
   const { label, style } =
-    riskPct < 0.5  ? { label: "LOW",    style: "border-emerald-700 text-emerald-400 bg-emerald-900/20" } :
-    riskPct <= 1.5 ? { label: "MEDIUM", style: "border-yellow-600  text-yellow-400  bg-yellow-900/20"  } :
-                     { label: "HIGH",   style: "border-red-700     text-red-400     bg-red-900/20"     };
+    riskPct < 0.5  ? { label: "LOW",    style: "border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/20" } :
+    riskPct <= 1.5 ? { label: "MEDIUM", style: "border-amber-400 dark:border-yellow-600   text-amber-700 dark:text-yellow-400  bg-amber-100/60 dark:bg-yellow-900/20"  } :
+                     { label: "HIGH",   style: "border-red-400 dark:border-red-700         text-red-700 dark:text-red-400     bg-red-100/60 dark:bg-red-900/20"     };
   return (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${style}`}>
       {label}
@@ -243,7 +244,7 @@ function DetailPanel({ trade, ltp, onAction }: {
             <button
               onClick={() => onAction("close")}
               className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100/40 dark:bg-slate-700/40 px-3 py-1.5
-                text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:bg-slate-700 transition-colors"
+                text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
               Close Trade
             </button>
@@ -256,7 +257,7 @@ function DetailPanel({ trade, ltp, onAction }: {
 
 interface ConfirmState { tradeId: string; action: "close" | "stop"; }
 
-export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }: LedgerProps) {
+export default function Ledger({ trades, livePrices, pricesLoading, onRefresh, emptyMessage }: LedgerProps) {
   const [loadingId,  setLoadingId]  = useState<string | null>(null);
   const [confirm,    setConfirm]    = useState<ConfirmState | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -299,10 +300,14 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
   if (trades.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
-        <p className="text-slate-400 dark:text-slate-500 text-sm">No trades saved yet.</p>
-        <p className="text-slate-400 dark:text-slate-600 text-xs">
-          Calculate a position and click <span className="text-slate-400 dark:text-slate-400">Add to Ledger</span>.
+        <p className="text-slate-400 dark:text-slate-500 text-sm">
+          {emptyMessage ?? "No trades saved yet."}
         </p>
+        {!emptyMessage && (
+          <p className="text-slate-400 dark:text-slate-600 text-xs">
+            Calculate a position and click <span className="text-slate-400 dark:text-slate-400">Add to Ledger</span>.
+          </p>
+        )}
       </div>
     );
   }
@@ -321,7 +326,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
           <div className="flex gap-2 shrink-0">
             <button onClick={() => setConfirm(null)}
               className="px-3 py-1 rounded-lg text-xs text-slate-400 dark:text-slate-400 border border-slate-300 dark:border-slate-600
-                hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+                hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
               Cancel
             </button>
             <button
@@ -354,14 +359,14 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                     <button onClick={() => setPnlMode("value")}
                       className={`px-1.5 py-0.5 text-xs transition-colors ${
                         pnlMode === "value"
-                          ? "bg-slate-600 text-slate-800 dark:text-slate-200"
-                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-400"
+                          ? "bg-slate-300 dark:bg-slate-600 text-slate-900 dark:text-slate-200"
+                          : "text-slate-400 dark:text-slate-600 hover:text-slate-700 dark:hover:text-slate-400"
                       }`}>₹</button>
                     <button onClick={() => setPnlMode("percent")}
                       className={`px-1.5 py-0.5 text-xs transition-colors ${
                         pnlMode === "percent"
-                          ? "bg-slate-600 text-slate-800 dark:text-slate-200"
-                          : "text-slate-400 dark:text-slate-600 hover:text-slate-400 dark:text-slate-400"
+                          ? "bg-slate-300 dark:bg-slate-600 text-slate-900 dark:text-slate-200"
+                          : "text-slate-400 dark:text-slate-600 hover:text-slate-700 dark:hover:text-slate-400"
                       }`}>%</button>
                   </div>
                 </div>
@@ -381,13 +386,11 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-800">
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {trades.map(trade => {
               const busy     = loadingId === trade.id;
               const expanded = expandedId === trade.id;
               const ltp      = livePrices[trade.ticker];
-              const value    = ltp !== undefined && trade.status === "OPEN"
-                ? ltp * trade.quantity : null;
 
               return [
                 <tr
@@ -396,7 +399,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                   className={[
                     "transition-colors cursor-pointer",
                     busy     ? "opacity-40 pointer-events-none" : "",
-                    expanded ? "bg-slate-50 dark:bg-slate-800/60" : "hover:bg-slate-100/30 dark:bg-slate-800/30",
+                    expanded ? "bg-slate-50 dark:bg-slate-800/60" : "hover:bg-slate-100/50 dark:hover:bg-slate-800/30",
                   ].join(" ")}
                 >
                   <td className="px-4 py-3">
@@ -444,7 +447,14 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
                     )}
                   </td>
                   <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
-                    {value !== null ? formatINR(value) : <span className="text-slate-400 dark:text-slate-600">—</span>}
+                    {(() => {
+                      if (trade.status === "OPEN") {
+                        const v = ltp !== undefined ? ltp * trade.quantity : null;
+                        return v !== null ? formatINR(v) : <span className="text-slate-400 dark:text-slate-600">—</span>;
+                      }
+                      if (trade.exit_price) return formatINR(trade.exit_price * trade.quantity);
+                      return <span className="text-slate-400 dark:text-slate-600">—</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
                     {trade.risk_amount ? formatINR(trade.risk_amount) : "—"}
@@ -473,26 +483,45 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh }:
           </tbody>
 
           {(() => {
-            const openTrades  = trades.filter(t => t.status === "OPEN");
-            const totalValue  = openTrades.reduce((sum, t) => {
-              const ltp = livePrices[t.ticker];
-              return sum + (ltp !== undefined ? ltp * t.quantity : t.entry_price * t.quantity);
+            // Sum across ALL visible trades (respects the active filter chip)
+            const totalEntry = trades.reduce((sum, t) =>
+              sum + t.entry_price * t.quantity, 0);
+
+            const totalValue = trades.reduce((sum, t) => {
+              if (t.status === "OPEN") {
+                const ltp = livePrices[t.ticker];
+                return sum + (ltp !== undefined ? ltp * t.quantity : t.entry_price * t.quantity);
+              }
+              if (t.exit_price) return sum + t.exit_price * t.quantity;
+              return sum + t.entry_price * t.quantity;
             }, 0);
-            const totalRisk   = openTrades.reduce((sum, t) => sum + (t.risk_amount ?? 0), 0);
-            const totalPnl    = openTrades.reduce((sum, t) => {
-              const ltp = livePrices[t.ticker];
-              return sum + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0);
+
+            const totalRisk = trades.reduce((sum, t) => sum + (t.risk_amount ?? 0), 0);
+
+            const totalPnl = trades.reduce((sum, t) => {
+              if (t.status === "OPEN") {
+                const ltp = livePrices[t.ticker];
+                return sum + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0);
+              }
+              return sum + (t.realised_pnl ?? 0);
             }, 0);
+
             const pnlPositive = totalPnl >= 0;
+            const openCount   = trades.filter(t => t.status === "OPEN").length;
+
             return (
               <tfoot className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
                 <tr className="text-xs text-slate-400 dark:text-slate-400">
                   <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">
                     Portfolio
-                    <div className="text-slate-400 dark:text-slate-600 font-normal">{openTrades.length} open positions</div>
+                    <div className="text-slate-400 dark:text-slate-600 font-normal">
+                      {trades.length} trade{trades.length !== 1 ? "s" : ""}
+                    </div>
                   </td>
                   <td className="px-4 py-3"/>
-                  <td className="px-4 py-3"/>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                    {formatINR(totalEntry)}
+                  </td>
                   <td className="px-4 py-3"/>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200">
                     {formatINR(totalValue)}
