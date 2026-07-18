@@ -11,7 +11,7 @@ interface ResultsPanelProps {
   totalCapital:    number;
   fetchedAt:       Date;
   exchange:        "NSE" | "BSE";
-  onDisplayChange: (qty: number, risk: number) => void;
+  onDisplayChange: (qty: number, risk: number, capitalRequired: number) => void;
 }
 
 function formatINR(v: number) {
@@ -96,7 +96,7 @@ export default function ResultsPanel({
     : recalculateWithCapitalLimit(limitValue, entryPrice, riskPerShare);
 
   useEffect(() => {
-    onDisplayChange(display.positionSize, display.actualRisk);
+    onDisplayChange(display.positionSize, display.actualRisk, display.capitalRequired);
   }, [display.positionSize, display.actualRisk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const riskExceedsMax = display.actualRisk > maxRiskAmount;
@@ -187,7 +187,7 @@ export default function ResultsPanel({
                 border-slate-300 dark:border-slate-600
                 bg-white dark:bg-slate-700/60 px-3 py-1.5 text-xs font-medium
                 text-slate-700 dark:text-slate-200
-                hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors
+                hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors
                 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <svg className="w-3 h-3 text-slate-400" viewBox="0 0 16 16" fill="none">

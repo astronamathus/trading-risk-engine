@@ -5,33 +5,53 @@ import { saveTrade } from "@/lib/db/trades";
 import { CalculationResult } from "@/types";
 
 interface SaveToLedgerButtonProps {
-  userId:        string | null;
-  ticker:        string;
-  result:        CalculationResult;
-  displayedQty:  number;
-  displayedRisk: number;
-  totalCapital:  number;
-  isQueued:      boolean;   // true when entry > live LTP
-  onSaved:       () => void;
+  userId:            string | null;
+  ticker:            string;
+  result:            CalculationResult;
+  displayedQty:      number;
+  displayedRisk:     number;
+  displayedCapReq:   number;          // capital required for this trade
+  availableCapital:  number | null;   // capital limit minus currently deployed
+  totalCapital:      number;
+  isQueued:          boolean;
+  onSaved:           () => void;
 }
 
-type ToastState = "idle" | "saving" | "success" | "error";
+type ToastState = "idle" | "saving" | "success" | "error" | "insufficient";
+
+function formatINR(v: number) {
+  return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export default function SaveToLedgerButton({
   userId, ticker, result, displayedQty, displayedRisk,
-  totalCapital, isQueued, onSaved,
+  displayedCapReq, availableCapital, totalCapital, isQueued, onSaved,
 }: SaveToLedgerButtonProps) {
   const [toast, setToast] = useState<ToastState>("idle");
 
+  // Check funds — only block if we actually have a capital figure loaded.
+  // Queued trades don't deploy capital immediately so we allow them through.
+  const insufficient =
+    !isQueued &&
+    availableCapital !== null &&
+    displayedCapReq > 0 &&
+    displayedCapReq > availableCapital;
+
   async function handleSave() {
     if (!userId) return;
+
+    if (insufficient) {
+      setToast("insufficient");
+      setTimeout(() => setToast("idle"), 4000);
+      return;
+    }
+
     setToast("saving");
     try {
       await saveTrade({
         user_id:      userId,
         ticker,
         entry_price:  result.entryPrice,
-        // entry_target set when queued — this is the price that activates the trade
         entry_target: isQueued ? result.entryPrice : undefined,
         stop_loss:    parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
         quantity:     displayedQty,
@@ -52,17 +72,35 @@ export default function SaveToLedgerButton({
 
   return (
     <div className="flex flex-col gap-2">
+      {/* Insufficient funds warning banner — shown above button when blocked */}
+      {insufficient && (
+        <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20
+          px-3 py-2.5 flex flex-col gap-0.5">
+          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+            Insufficient capital
+          </p>
+          <p className="text-xs text-red-500 dark:text-red-500">
+            This trade requires {formatINR(displayedCapReq)} but you only have{" "}
+            {formatINR(availableCapital!)} available
+            {availableCapital! < 0 ? " (capital fully deployed)" : ""}.
+          </p>
+        </div>
+      )}
+
       <button
         onClick={handleSave}
         disabled={!userId || toast === "saving"}
-        className="
-          w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100/60 dark:bg-slate-700/60 px-4 py-2.5
-          text-sm font-medium text-slate-800 dark:text-slate-200 transition-all
-          hover:bg-slate-200 dark:hover:bg-slate-600 hover:border-slate-400 dark:hover:border-slate-500
+        className={`
+          w-full rounded-lg border px-4 py-2.5
+          text-sm font-medium transition-all
           disabled:opacity-40 disabled:cursor-not-allowed
           focus:outline-none focus:ring-2 focus:ring-blue-500
           flex items-center justify-center gap-2
-        "
+          ${insufficient
+            ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 cursor-not-allowed opacity-70"
+            : "border-slate-300 dark:border-slate-600 bg-slate-100/60 dark:bg-slate-700/60 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 hover:border-slate-400 dark:hover:border-slate-500"
+          }
+        `}
       >
         {toast === "saving" ? (
           <>
@@ -71,6 +109,15 @@ export default function SaveToLedgerButton({
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
             </svg>
             Saving…
+          </>
+        ) : insufficient ? (
+          <>
+            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="8" cy="8" r="6.5"/>
+              <path d="M8 5v3.5M8 11h.01"/>
+            </svg>
+            Insufficient Capital
           </>
         ) : (
           <>
@@ -102,6 +149,26 @@ export default function SaveToLedgerButton({
       )}
       {toast === "error" && (
         <p className="text-xs text-red-400 text-center">✗ Failed to save — try again</p>
+      )}
+      {toast === "insufficient" && (
+        <p className="text-xs text-red-500 text-center">
+          ✗ Trade blocked — capital required exceeds available funds
+        </p>
+      )}
+
+      {/* Always show remaining capital when loaded and not in error state */}
+      {availableCapital !== null && toast === "idle" && (
+        <p className={`text-xs text-center tabular-nums ${
+          availableCapital <= 0
+            ? "text-red-500 dark:text-red-400"
+            : insufficient
+              ? "text-red-500 dark:text-red-400"
+              : "text-slate-400 dark:text-slate-500"
+        }`}>
+          {availableCapital <= 0
+            ? "No capital available"
+            : `${formatINR(availableCapital)} available`}
+        </p>
       )}
     </div>
   );

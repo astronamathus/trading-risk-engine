@@ -4,13 +4,14 @@
 // ============================================================
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import CalculatorForm     from "@/components/CalculatorForm";
 import ResultsPanel       from "@/components/ResultsPanel";
 import SaveToLedgerButton from "@/components/SaveToLedgerButton";
 import { validateInputs, calculatePosition, validateStopLoss } from "@/lib/calculations";
 import { CalculatorInputs, CalculationResult, AppStatus } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
+import { supabase } from "@/lib/supabase";
 
 export default function CalculatorClient() {
   const [status,          setStatus]          = useState<AppStatus>("idle");
@@ -20,13 +21,38 @@ export default function CalculatorClient() {
   const [totalCapital,    setTotalCapital]    = useState<number>(0);
   const [fetchedAt,       setFetchedAt]       = useState<Date | null>(null);
   const [exchange,        setExchange]        = useState<"NSE" | "BSE">("NSE");
-  const [displayedQty,    setDisplayedQty]    = useState<number>(0);
-  const [displayedRisk,   setDisplayedRisk]   = useState<number>(0);
-  const [isQueued,        setIsQueued]        = useState(false);
-  const [livePriceAtCalc, setLivePriceAtCalc] = useState<number>(0);
+  const [displayedQty,       setDisplayedQty]       = useState<number>(0);
+  const [displayedRisk,      setDisplayedRisk]       = useState<number>(0);
+  const [displayedCapReq,    setDisplayedCapReq]     = useState<number>(0);
+  const [isQueued,           setIsQueued]            = useState(false);
+  const [livePriceAtCalc,    setLivePriceAtCalc]     = useState<number>(0);
+  const [availableCapital,   setAvailableCapital]    = useState<number | null>(null);
 
   const { user } = useAuth();
   const userId   = user?.id ?? null;
+
+  // Fetch capital limit and currently deployed capital (open trades cost)
+  // so we know how much is genuinely available before allowing a save.
+  useEffect(() => {
+    if (!userId) return;
+    async function fetchAvailable() {
+      const [userRow, tradesRow] = await Promise.all([
+        supabase.from("trader_users").select("capital_limit").eq("id", userId).single(),
+        supabase.from("trades")
+          .select("entry_price, quantity")
+          .eq("user_id", userId)
+          .eq("status", "OPEN")
+          .is("deleted_at", null),
+      ]);
+      const limit     = userRow.data?.capital_limit ?? 100000;
+      const deployed  = (tradesRow.data ?? []).reduce(
+        (sum: number, t: { entry_price: number; quantity: number }) =>
+          sum + t.entry_price * t.quantity, 0
+      );
+      setAvailableCapital(limit - deployed);
+    }
+    fetchAvailable();
+  }, [userId]);
 
   async function handleCalculate(inputs: CalculatorInputs & { entryPrice: number }) {
     setError(null);
@@ -139,7 +165,7 @@ export default function CalculatorClient() {
               totalCapital={totalCapital}
               fetchedAt={fetchedAt!}
               exchange={exchange}
-              onDisplayChange={(qty, risk) => { setDisplayedQty(qty); setDisplayedRisk(risk); }}
+              onDisplayChange={(qty, risk, capReq) => { setDisplayedQty(qty); setDisplayedRisk(risk); setDisplayedCapReq(capReq); }}
             />
             <SaveToLedgerButton
               userId={userId}
@@ -147,6 +173,8 @@ export default function CalculatorClient() {
               result={result}
               displayedQty={displayedQty}
               displayedRisk={displayedRisk}
+              displayedCapReq={displayedCapReq}
+              availableCapital={availableCapital}
               totalCapital={totalCapital}
               isQueued={isQueued}
               onSaved={() => {}}
