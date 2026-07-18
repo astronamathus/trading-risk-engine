@@ -73,11 +73,13 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
       mtm: openPnl !== 0 ? Math.round(p.realised + openPnl) : null,
     }));
 
-    // Add a "Now" point to extend MTM to today
+    // Add a "Now" point to anchor MTM to today's date.
+    // realised is null so the green realised line ends at the last closed trade —
+    // only the MTM dashed line extends forward to show current open P&L.
     if (pointsWithMtm.length > 0 && openPnl !== 0) {
       pointsWithMtm.push({
         ts:       Date.now(),
-        realised: Math.round(cum),
+        realised: null as unknown as number,
         mtm:      Math.round(cum + openPnl),
         ticker:   "",
         month:    new Date().toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
@@ -108,15 +110,17 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
     }));
   }, [fullSeries, selectedMonth]);
 
-  // Smart tick labels
   const tickIndices = useMemo(() => new Set(pickTicks(series.length)), [series.length]);
-  const chartData   = useMemo(() =>
-    series.map((p, i) => ({
-      ...p,
-      label: tickIndices.has(i) ? tickLabel(p.ts) : "",
-    })),
+  // dataKey is now "ts" so every point is uniquely identified by timestamp.
+  // The sparse label set is used only for tick display via tickFormatter.
+  // Previously using dataKey="label" caused all points with label="" to be
+  // treated as the same x position, so hovering any unlabelled point snapped
+  // the tooltip to the first point (27 May).
+  const tickTsSet = useMemo(
+    () => new Set(series.filter((_, i) => tickIndices.has(i)).map(p => p.ts)),
     [series, tickIndices]
   );
+  const chartData = useMemo(() => series, [series]);
 
   const isEmpty       = chartData.length === 0;
   const lastRealised  = chartData[chartData.length - 1]?.realised ?? 0;
@@ -219,11 +223,14 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
               strokeOpacity={0.35} vertical={false}/>
 
             <XAxis
-              dataKey="label"
+              dataKey="ts"
+              scale="time"
+              type="number"
+              domain={["dataMin", "dataMax"]}
               tick={{ fill: "#94a3b8", fontSize: 11 }}
               axisLine={false} tickLine={false}
-              interval={0}
-              tickFormatter={v => v ?? ""}
+              ticks={series.filter((_, i) => tickIndices.has(i)).map(p => p.ts)}
+              tickFormatter={ts => tickTsSet.has(ts) ? tickLabel(ts) : ""}
             />
 
             <YAxis
@@ -263,7 +270,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
               fill="url(#realisedGrad)"
               dot={false}
               activeDot={{ r: 4, strokeWidth: 0 }}
-              connectNulls
+              connectNulls={false}
             />
           </AreaChart>
         </ResponsiveContainer>
