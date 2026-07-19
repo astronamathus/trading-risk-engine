@@ -9,6 +9,7 @@ export interface Organisation {
   name:       string;
   slug:       string;
   domain:     string | null;
+  currency:   "INR" | "USD";
   created_at: string;
 }
 
@@ -36,13 +37,15 @@ export interface OrgMember {
 // ── Org creation ─────────────────────────────────────────────
 
 export async function createOrganisation(
-  name:    string,
-  _userId: string,
-  domain?: string,
+  name:     string,
+  _userId:  string,
+  domain?:  string,
+  currency: "INR" | "USD" = "INR",
 ): Promise<Organisation> {
   const { data, error } = await supabase.rpc("create_org_with_owner", {
-    p_name:   name,
-    p_domain: domain ?? null,
+    p_name:     name,
+    p_domain:   domain ?? null,
+    p_currency: currency,
   });
   if (error) throw new Error(`Failed to create org: ${error.message}`);
   if (!data?.ok) throw new Error(data?.error ?? "Failed to create org");
@@ -59,10 +62,10 @@ export async function createOrganisation(
 
 // ── Indie user ───────────────────────────────────────────────
 
-export async function setIndieUser(userId: string): Promise<void> {
+export async function setIndieUser(userId: string, currency: "INR" | "USD" = "INR"): Promise<void> {
   const { error } = await supabase
     .from("trader_users")
-    .update({ user_type: "indie" })
+    .update({ user_type: "indie", currency })
     .eq("id", userId);
   if (error) throw new Error(error.message);
 }

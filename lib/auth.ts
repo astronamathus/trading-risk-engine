@@ -18,7 +18,8 @@ export interface AppUser {
   avatarUrl:   string | null;
   role:        "user" | "admin";
   userType:    "indie" | "org_member" | "org_admin" | null;
-  orgId:       string | null; // first org (for routing); use org_memberships for full list
+  orgId:       string | null;
+  currency:    "INR" | "USD";
 }
 
 export async function signInWithGoogle(): Promise<void> {
@@ -50,7 +51,7 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
 
   const { data: existing } = await supabase
     .from("trader_users")
-    .select("id, role, user_type, org_id")
+    .select("id, role, user_type, org_id, currency")
     .eq("auth_user_id", authUser.id)
     .single();
 
@@ -72,6 +73,7 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
       role:      existing.role as "user" | "admin",
       userType:  existing.user_type as AppUser["userType"],
       orgId:     existing.org_id ?? null,
+      currency:  (existing.currency as "INR" | "USD") ?? "INR",
     };
   }
 
@@ -101,6 +103,7 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
     role:      created.role as "user" | "admin",
     userType:  null,
     orgId:     null,
+    currency:  "INR" as const,
   };
 }
 

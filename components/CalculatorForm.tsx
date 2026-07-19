@@ -7,7 +7,8 @@ import { searchStocks } from "@/lib/stockList";
 interface Suggestion {
   symbol:   string;
   name:     string;
-  exchange: "NSE" | "BSE";
+  exchange: "NSE" | "BSE" | "NYSE" | "NASDAQ";
+  market:   "INR" | "USD";
 }
 
 interface CalculatorFormProps {
@@ -27,10 +28,10 @@ function Field({ label, hint, children }: {
   );
 }
 
-export function ExchangeBadge({ exchange }: { exchange: "NSE" | "BSE" }) {
+export function ExchangeBadge({ exchange }: { exchange: "NSE" | "BSE" | "NYSE" | "NASDAQ" }) {
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
-      exchange === "NSE"
+      exchange === "NSE" || exchange === "NASDAQ"
         ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
         : "border-amber-500  text-amber-600  dark:text-amber-400  bg-amber-50  dark:bg-amber-900/30"
     }`}>
@@ -101,9 +102,10 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     setSelectedExchange(null); setEntryPrice("");
     if (!upper.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
     const results: Suggestion[] = searchStocks(upper, 8).map(s => ({
-      symbol: `${s.symbol}.${s.exchange === "NSE" ? "NS" : "BO"}`,
-      name:   s.name,
+      symbol:   s.market === "USD" ? s.symbol : `${s.symbol}.${s.exchange === "NSE" ? "NS" : "BO"}`,
+      name:     s.name,
       exchange: s.exchange,
+      market:   s.market,
     }));
     setSuggestions(results);
     setShowSuggestions(results.length > 0);
