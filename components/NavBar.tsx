@@ -9,6 +9,7 @@
 //   - Profile dropdown shows org role badge
 //   - "Join an organisation" option above Sign out for
 //     non-admin org members and indie users
+//   - Super admins see "Super Admin" nav link + dropdown section
 // ============================================================
 
 import Link                      from "next/link";
@@ -78,7 +79,7 @@ const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof SunIcon }[] = [
 export default function NavBar() {
   const pathname            = usePathname();
   const router              = useRouter();
-  const { user, loading }   = useAuth();
+  const { user, loading, isSuperAdmin } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const [signingOut, setSigningOut] = useState(false);
@@ -182,6 +183,20 @@ export default function NavBar() {
               </Link>
             </>
           )}
+
+          {isSuperAdmin && (
+            <>
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1"/>
+              <Link href="/super"
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  pathname.startsWith("/super")
+                    ? "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300"
+                    : linkBase
+                }`}>
+                Super Admin
+              </Link>
+            </>
+          )}
         </div>
       )}
 
@@ -236,6 +251,42 @@ export default function NavBar() {
                         {label}
                       </Link>
                     ))}
+                    <div className={`border-t ${divider} my-1`}/>
+                  </>
+                )}
+
+                {/* Super admin section */}
+                {isSuperAdmin && (
+                  <>
+                    <div className={`border-t ${divider} my-1`}/>
+                    <p className="px-3 pt-1 text-xs text-purple-400 uppercase tracking-wider font-medium">
+                      Super Admin
+                    </p>
+                    <Link href="/super"
+                      onClick={() => setMenuOpen(false)}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm
+                        rounded-lg transition-colors ${dropItem}`}>
+                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none"
+                        stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"
+                        strokeLinejoin="round">
+                        <rect x="2" y="3" width="12" height="11" rx="1"/>
+                        <path d="M5 14V9h6v5M8 3V1"/>
+                        <rect x="5.5" y="5.5" width="2" height="2" rx="0.3"/>
+                        <rect x="8.5" y="5.5" width="2" height="2" rx="0.3"/>
+                      </svg>
+                      All orgs
+                    </Link>
+                    <Link href="/super/new"
+                      onClick={() => setMenuOpen(false)}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm
+                        rounded-lg transition-colors ${dropItem}`}>
+                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none"
+                        stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
+                        strokeLinejoin="round">
+                        <path d="M8 3v10M3 8h10"/>
+                      </svg>
+                      Create org
+                    </Link>
                     <div className={`border-t ${divider} my-1`}/>
                   </>
                 )}
