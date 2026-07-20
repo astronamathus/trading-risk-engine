@@ -14,7 +14,8 @@ import { useAuth }    from "@/components/AuthProvider";
 import { getUserOrg } from "@/lib/db/org";
 import { supabase }   from "@/lib/supabase";
 
-type SortMetric = "lifetime_pnl" | "monthly_pnl" | "win_rate" | "avg_r";
+type SortMetric = "lifetime_pnl" | "monthly_pnl" | "win_rate" | "trade_count";
+type ServerSortMetric = Exclude<SortMetric, "trade_count">;
 
 interface LeaderboardRow {
   rank:            number;
@@ -28,7 +29,6 @@ interface LeaderboardRow {
   lifetime_pnl?:   number;
   monthly_pnl?:    number;
   win_rate?:       number | null;
-  avg_r?:          number | null;
 }
 
 interface OrgGroup {
@@ -61,8 +61,8 @@ function SortButton({ label, metric, current, onChange }: {
     <button onClick={() => onChange(metric)}
       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
         current === metric
-          ? "bg-blue-600 text-slate-900 dark:text-white"
-          : "border border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700"
+          ? "bg-blue-600 text-white"
+          : "border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700"
       }`}>
       {label}
     </button>
@@ -112,9 +112,10 @@ export default function LeaderboardPage() {
   const loadBoard = useCallback(async (groupId: string, sortMetric: SortMetric) => {
     setLoading(true);
     setError(null);
+    const serverSort: ServerSortMetric = sortMetric === "trade_count" ? "lifetime_pnl" : sortMetric;
     const { data, error: rpcErr } = await supabase.rpc("get_group_leaderboard", {
       p_group_id: groupId,
-      p_sort:     sortMetric,
+      p_sort:     serverSort,
     });
     if (rpcErr) { setError(rpcErr.message); setLoading(false); return; }
     if (!data?.ok) { setError(data?.error ?? "Failed to load"); setLoading(false); return; }
@@ -194,7 +195,12 @@ export default function LeaderboardPage() {
     </main>
   );
 
-  const visibleRows = rows.filter(r => r.on_leaderboard || r.is_current_user);
+  const visibleRows = [...rows.filter(r => r.on_leaderboard || r.is_current_user)]
+    .sort((a, b) => {
+      if (sort !== "trade_count") return 0;
+      const closedDelta = b.total_closed - a.total_closed;
+      return closedDelta !== 0 ? closedDelta : b.open_trades - a.open_trades;
+    });
   const selectedGroupName = groups.find(g => g.id === selectedGroup)?.name ?? "";
   const myGroup = groups.find(g => g.is_my_group);
 
@@ -217,7 +223,7 @@ export default function LeaderboardPage() {
               font-medium transition-colors disabled:opacity-50 ${
               iAmOnLb
                 ? "border-emerald-700 text-emerald-400 bg-emerald-900/20 hover:bg-emerald-900/40"
-                : "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700"
+                : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700"
             }`}>
             {iAmOnLb ? "✓ On leaderboard" : "+ Join leaderboard"}
           </button>
@@ -256,7 +262,7 @@ export default function LeaderboardPage() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                       selectedGroup === g.id
                         ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-                        : "border border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-700"
+                        : "border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700"
                     }`}>
                     {g.name}
                     <span className="ml-1.5 text-slate-400 dark:text-slate-500">{g.member_count}</span>
@@ -279,7 +285,7 @@ export default function LeaderboardPage() {
                 <SortButton label="Lifetime P&L" metric="lifetime_pnl" current={sort} onChange={handleSort}/>
                 <SortButton label="Monthly P&L"  metric="monthly_pnl"  current={sort} onChange={handleSort}/>
                 <SortButton label="Win Rate"     metric="win_rate"      current={sort} onChange={handleSort}/>
-                <SortButton label="Avg R"        metric="avg_r"         current={sort} onChange={handleSort}/>
+                <SortButton label="Trade Count"   metric="trade_count"   current={sort} onChange={handleSort}/>
               </div>
             )}
 
@@ -353,11 +359,10 @@ export default function LeaderboardPage() {
                                 value={row.win_rate != null ? `${row.win_rate.toFixed(0)}%` : "—"}
                                 positive={row.win_rate != null && row.win_rate >= 50}/>
                             )}
-                            {sort === "avg_r" && (
-                              <StatCell label="Avg R"
-                                value={row.avg_r != null
-                                  ? `${row.avg_r >= 0 ? "+" : ""}${row.avg_r.toFixed(2)}R` : "—"}
-                                positive={row.avg_r != null && row.avg_r >= 0}/>
+                            {sort === "trade_count" && (
+                              <StatCell label="Trades"
+                                value={`${row.total_closed} closed · ${row.open_trades} open`}
+                                positive={row.total_closed > 0}/>
                             )}
                           </div>
                         )}
