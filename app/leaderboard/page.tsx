@@ -5,7 +5,7 @@
 //
 // Members: see only their own group leaderboard (ranks + counts)
 // Admins:  can switch between all groups + see full metrics
-// Both:    opt-in toggle (admins hidden by default)
+// Members: opt-in toggle
 // ============================================================
 
 import { useState, useEffect, useCallback } from "react";
@@ -195,7 +195,10 @@ export default function LeaderboardPage() {
     </main>
   );
 
-  const visibleRows = [...rows.filter(r => r.on_leaderboard || r.is_current_user)]
+  const visibleRows = [...rows.filter(r => {
+    const hasExecutedTrades = r.total_closed + r.open_trades > 0;
+    return r.on_leaderboard || (r.is_current_user && (hasExecutedTrades || !isAdmin));
+  })]
     .sort((a, b) => {
       if (sort !== "trade_count") return 0;
       const closedDelta = b.total_closed - a.total_closed;
@@ -216,17 +219,19 @@ export default function LeaderboardPage() {
               {orgName}{selectedGroupName ? ` · ${selectedGroupName}` : ""}
             </p>
           </div>
-          <button
-            onClick={handleToggleLeaderboard}
-            disabled={toggling}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm
-              font-medium transition-colors disabled:opacity-50 ${
-              iAmOnLb
-                ? "border-emerald-700 text-emerald-400 bg-emerald-900/20 hover:bg-emerald-900/40"
-                : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700"
-            }`}>
-            {iAmOnLb ? "✓ On leaderboard" : "+ Join leaderboard"}
-          </button>
+          {!isAdmin && (
+            <button
+              onClick={handleToggleLeaderboard}
+              disabled={toggling}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm
+                font-medium transition-colors disabled:opacity-50 ${
+                iAmOnLb
+                  ? "border-emerald-700 text-emerald-400 bg-emerald-900/20 hover:bg-emerald-900/40"
+                  : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700"
+              }`}>
+              {iAmOnLb ? "✓ On leaderboard" : "+ Join leaderboard"}
+            </button>
+          )}
         </div>
 
         {error && (
@@ -374,21 +379,13 @@ export default function LeaderboardPage() {
             )}
 
             {/* Ghost row if opted out */}
-            {!iAmOnLb && (() => {
+            {!isAdmin && !iAmOnLb && (() => {
               const me = rows.find(r => r.is_current_user);
               if (!me) return null;
               return (
                 <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700
                   bg-slate-100/20 dark:bg-slate-800/20 px-4 py-3 text-xs text-slate-400 dark:text-slate-500 text-center">
                   You are not on the leaderboard. Click "Join leaderboard" to appear.
-                  {isAdmin && me.lifetime_pnl !== undefined && (
-                    <span className="ml-1">
-                      Your P&L:{" "}
-                      <span className={me.lifetime_pnl >= 0 ? "text-emerald-400" : "text-red-400"}>
-                        {formatINR(me.lifetime_pnl)}
-                      </span>
-                    </span>
-                  )}
                 </div>
               );
             })()}
