@@ -77,7 +77,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
     const risk = t.risk_amount ?? 0;
     if (ltp === undefined || risk === 0) return { trade: t, winning: null };
     const pnl    = (ltp - t.entry_price) * t.quantity;
-    const target = t.entry_price + 2 * (t.entry_price - t.stop_loss);
+    const target = t.target ?? t.entry_price + 2 * (t.entry_price - t.stop_loss);
     return { trade: t, winning: ltp >= target || pnl > 0 };
   });
 

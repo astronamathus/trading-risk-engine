@@ -114,7 +114,9 @@ function DetailPanel({ trade, ltp, onAction }: {
   onAction: (action: "close" | "stop") => void;
 }) {
   const riskPerShare  = trade.entry_price - trade.stop_loss;
-  const target        = trade.entry_price + 2 * riskPerShare;
+  const target        = trade.target ?? trade.entry_price + 2 * riskPerShare;
+  const rewardPerShare = target - trade.entry_price;
+  const rrReward      = riskPerShare > 0 ? rewardPerShare / riskPerShare : 2;
   const current       = ltp ?? trade.entry_price;
   const range         = target - trade.stop_loss;
   const entryPct      = (riskPerShare / range) * 100;
@@ -157,7 +159,7 @@ function DetailPanel({ trade, ltp, onAction }: {
             { label: "Stop Loss", value: formatINR(trade.stop_loss),   colour: "text-red-400"     },
             { label: "Target",    value: formatINR(target),            colour: "text-emerald-400" },
             { label: priceLabel,  value: priceValue,                   colour: priceColour        },
-            { label: "R:R",       value: "1 : 2",                      colour: "text-slate-700 dark:text-slate-300"   },
+            { label: "Risk:Reward", value: `1 : ${rrReward.toFixed(2)}`,       colour: "text-slate-700 dark:text-slate-300"   },
           ].map(({ label, value, colour }) => (
             <div key={label} className="flex flex-col gap-0.5">
               <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</span>

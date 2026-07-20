@@ -69,7 +69,7 @@ export default function DashboardPage() {
           if (ltp >= trade.entry_target) actions.push(activateTrade(trade.id));
         }
         if (trade.status === "OPEN") {
-          const target = trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
+          const target = trade.target ?? trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
           if (ltp >= target)
             actions.push(closeTrade(trade.id, "TARGET_HIT", ltp, trade.quantity, trade.entry_price));
           else if (ltp <= trade.stop_loss)
@@ -143,7 +143,7 @@ export default function DashboardPage() {
             onClick={() => refresh()}
             disabled={refreshing}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600
-              text-xs font-medium text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200
+              text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white
               hover:bg-white dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <RefreshIcon spinning={refreshing}/>

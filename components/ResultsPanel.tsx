@@ -60,7 +60,7 @@ type CapitalMode = "auto" | "limit";
 export default function ResultsPanel({
   result, ticker, totalCapital, fetchedAt, exchange, onDisplayChange,
 }: ResultsPanelProps) {
-  const { entryPrice, riskPerShare, maxRiskAmount } = result;
+  const { entryPrice, riskPerShare, maxRiskAmount, target, riskRatio, rewardRatio } = result;
 
   const defaultLimit = Math.round(totalCapital * 0.10);
   const [mode,         setMode]         = useState<CapitalMode>("limit");
@@ -140,7 +140,9 @@ export default function ResultsPanel({
       {/* Row 1 */}
       <div className="grid grid-cols-2 gap-3">
         <Tile label="Entry Price"    value={formatINR(entryPrice)}  tooltip="Current market price fetched live"/>
+        <Tile label="Target" value={formatINR(target)} tooltip="Entry + risk per share × reward/risk ratio"/>
         <Tile label="Risk Per Share" value={formatINR(riskPerShare)} tooltip="Entry Price − Stop Loss"/>
+        <Tile label="Risk:Reward" value={`${riskRatio} : ${rewardRatio}`} tooltip="Editable trade settings ratio"/>
       </div>
 
       {/* Row 2 */}

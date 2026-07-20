@@ -73,7 +73,7 @@ export default function LedgerPage() {
       }
 
       if (trade.status === "OPEN") {
-        const target = trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
+        const target = trade.target ?? trade.entry_price + 2 * (trade.entry_price - trade.stop_loss);
         if (ltp >= target) {
           actions.push(closeTrade(trade.id, "TARGET_HIT", ltp, trade.quantity, trade.entry_price));
         } else if (ltp <= trade.stop_loss) {

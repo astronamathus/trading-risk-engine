@@ -54,6 +54,7 @@ export default function SaveToLedgerButton({
         entry_price:  result.entryPrice,
         entry_target: isQueued ? result.entryPrice : undefined,
         stop_loss:    parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
+        target:       result.target,
         quantity:     displayedQty,
         risk_amount:  displayedRisk,
         capital:      totalCapital,

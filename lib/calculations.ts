@@ -20,12 +20,15 @@ export function calculateCapitalRequired(positionSize: number, entryPrice: numbe
 }
 
 export function validateInputs(inputs: CalculatorInputs): string | null {
-  const { ticker, stopLoss, capital, riskPercent, rrRatio } = inputs;
+  const { ticker, stopLoss, capital, riskPercent, riskRatio, rewardRatio } = inputs;
   if (!ticker.trim())                        return "Please enter a stock ticker.";
   if (stopLoss <= 0)                         return "Stop loss must be greater than zero.";
   if (capital <= 0)                          return "Capital must be greater than zero.";
   if (riskPercent <= 0 || riskPercent > 100) return "Risk percentage must be between 0 and 100.";
-  if (rrRatio < 0.5 || rrRatio > 20)        return "R:R ratio must be between 0.5 and 20.";
+  if (!Number.isFinite(riskRatio) || riskRatio <= 0 || riskRatio > 20)
+    return "Risk ratio must be between 0 and 20.";
+  if (!Number.isFinite(rewardRatio) || rewardRatio <= 0 || rewardRatio > 20)
+    return "Reward ratio must be between 0 and 20.";
   return null;
 }
 
@@ -42,8 +45,10 @@ export function validateStopLoss(
 }
 
 export function calculatePosition(inputs: CalculatorInputs, entryPrice: number): CalculationResult {
-  const { stopLoss, capital, riskPercent, rrRatio } = inputs;
-  const rr = Math.max(0.5, rrRatio || 2);
+  const { stopLoss, capital, riskPercent, riskRatio, rewardRatio } = inputs;
+  const riskSide = riskRatio > 0 ? riskRatio : 1;
+  const rewardSide = rewardRatio > 0 ? rewardRatio : 2;
+  const rr = rewardSide / riskSide;
 
   const riskPerShare    = calculateRiskPerShare(entryPrice, stopLoss);
   if (riskPerShare <= 0) throw new Error("Stop loss must be lower than the current market price.");
@@ -60,6 +65,8 @@ export function calculatePosition(inputs: CalculatorInputs, entryPrice: number):
     positionSize,
     capitalRequired,
     target,
+    riskRatio:     riskSide,
+    rewardRatio:   rewardSide,
     rrRatio:       rr,
   };
 }
