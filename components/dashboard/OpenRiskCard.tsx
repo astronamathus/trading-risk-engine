@@ -103,16 +103,20 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
 
   // ── Risk table rows ───────────────────────────────────────
   const tableRows = useMemo(() => open.map(t => {
-    const ltp      = livePrices[t.ticker];
-    const riskAmt  = t.risk_amount ?? 0;
-    const riskPct  = totalRisk > 0 ? (riskAmt / totalRisk) * 100 : 0;
-    const drawdown = ltp !== undefined ? Math.min(0, (ltp - t.entry_price) * t.quantity) : 0;
-    const daysHeld = Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000);
-    const sl       = t.stop_loss ?? (t.entry_price - riskAmt / t.quantity);
-    return { trade: t, ltp, riskAmt, riskPct, drawdown, daysHeld, sl };
+    const ltp       = livePrices[t.ticker];
+    const riskAmt   = t.risk_amount ?? 0;
+    const riskPct   = totalRisk > 0 ? (riskAmt / totalRisk) * 100 : 0;
+    const returnPct = ltp !== undefined
+      ? ((ltp - t.entry_price) / t.entry_price) * 100
+      : null;
+    const daysHeld  = Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000);
+    const sl        = t.stop_loss ?? (t.entry_price - riskAmt / t.quantity);
+    return { trade: t, ltp, riskAmt, riskPct, returnPct, daysHeld, sl };
   }).sort((a, b) => b.riskAmt - a.riskAmt), [open, livePrices, totalRisk]);
 
-  const totalDrawdown = tableRows.reduce((s, r) => s + r.drawdown, 0);
+  const totalReturnPct = tableRows.length > 0 && tableRows.some(r => r.returnPct !== null)
+    ? tableRows.reduce((s, r) => s + (r.returnPct ?? 0), 0) / tableRows.filter(r => r.returnPct !== null).length
+    : null;
 
   const PieTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
@@ -269,12 +273,12 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
               <th className="pb-2 pr-4 text-left font-medium">Risk ₹</th>
               <th className="pb-2 pr-4 text-left font-medium">Pool %</th>
               <th className="pb-2 pr-6 text-left font-medium">SL · TG</th>
-              <th className="pb-2 pr-4 text-left font-medium">Drawdown</th>
+              <th className="pb-2 pr-4 text-left font-medium">Return %</th>
               <th className="pb-2 text-left font-medium">Days</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-            {tableRows.map(({ trade, ltp, riskAmt, riskPct, drawdown, daysHeld, sl }) => (
+            {tableRows.map(({ trade, ltp, riskAmt, riskPct, returnPct, daysHeld, sl }) => (
               <tr key={trade.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                 <td className="py-2.5 pr-4">
                   <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
@@ -294,9 +298,13 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
                   <SlTgBar entry={trade.entry_price} sl={sl} ltp={ltp}/>
                 </td>
                 <td className={`py-2.5 pr-4 tabular-nums text-xs font-medium ${
-                  drawdown < 0 ? "text-red-400" : "text-slate-400 dark:text-slate-600"
+                  returnPct === null ? "text-slate-400 dark:text-slate-600"
+                  : returnPct >= 0   ? "text-emerald-600 dark:text-emerald-400"
+                  :                    "text-red-600 dark:text-red-400"
                 }`}>
-                  {drawdown < 0 ? formatINR(drawdown) : "—"}
+                  {returnPct !== null
+                    ? `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%`
+                    : "—"}
                 </td>
                 <td className="py-2.5 tabular-nums text-slate-400 dark:text-slate-500 text-xs">
                   {daysHeld === 0 ? "Today" : `${daysHeld}d`}
@@ -312,8 +320,14 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
               <td className="pt-3 tabular-nums text-amber-400 font-medium">{formatINR(totalRisk)}</td>
               <td className="pt-3">100%</td>
               <td className="pt-3"/>
-              <td className={`pt-3 tabular-nums font-medium ${totalDrawdown < 0 ? "text-red-400" : "text-slate-500 dark:text-slate-600"}`}>
-                {totalDrawdown < 0 ? formatINR(totalDrawdown) : "—"}
+              <td className={`pt-3 tabular-nums font-medium ${
+                totalReturnPct === null ? "text-slate-500 dark:text-slate-600"
+                : totalReturnPct >= 0  ? "text-emerald-600 dark:text-emerald-400"
+                :                         "text-red-600 dark:text-red-400"
+              }`}>
+                {totalReturnPct !== null
+                  ? `avg ${totalReturnPct >= 0 ? "+" : ""}${totalReturnPct.toFixed(2)}%`
+                  : "—"}
               </td>
               <td className="pt-3"/>
             </tr>
