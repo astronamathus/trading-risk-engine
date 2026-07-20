@@ -6,6 +6,8 @@
 //     trader_users so leaderboard can show real names/avatars
 //     without needing the admin API
 //   - orgId retained on AppUser for backwards-compat routing
+//   - isSuperAdmin(user) helper — role === "admin" check in
+//     one place so nothing hardcodes the string elsewhere
 // ============================================================
 
 import { supabase } from "./supabase";
@@ -20,6 +22,11 @@ export interface AppUser {
   userType:    "indie" | "org_member" | "org_admin" | null;
   orgId:       string | null;
   currency:    "INR" | "USD";
+}
+
+/** True when the user has platform-level super admin access. */
+export function isSuperAdmin(user: AppUser | null): boolean {
+  return user?.role === "admin";
 }
 
 export async function signInWithGoogle(): Promise<void> {

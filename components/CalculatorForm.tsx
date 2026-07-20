@@ -72,7 +72,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const [suggestions,     setSuggestions]     = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex,     setActiveIndex]     = useState(-1);
-  const [selectedExchange, setSelectedExchange] = useState<"NSE" | "BSE" | null>(null);
+  const [selectedExchange, setSelectedExchange] = useState<"NSE" | "BSE" | "NYSE" | "NASDAQ" | null>(null);
 
   const wrapperRef  = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);

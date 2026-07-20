@@ -3,16 +3,17 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase }               from "@/lib/supabase";
-import { ensureAuthUser, AppUser } from "@/lib/auth";
+import { ensureAuthUser, isSuperAdmin as checkSuperAdmin, AppUser } from "@/lib/auth";
 
 interface AuthContextValue {
-  user:    AppUser | null;
-  loading: boolean;
-  refresh: () => Promise<void>;
+  user:         AppUser | null;
+  loading:      boolean;
+  refresh:      () => Promise<void>;
+  isSuperAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue>({
-  user: null, loading: true, refresh: async () => {},
+  user: null, loading: true, refresh: async () => {}, isSuperAdmin: false,
 });
 
 export function useAuth() {
@@ -29,6 +30,7 @@ const ONBOARDING_FLOW_PATHS = [
   "/org/new",      // create org (was /org/setup — missing from original list)
   "/org/setup",    // keep for backwards compat
   "/join",         // invite acceptance
+  "/super",        // super admin — has its own layout-level role guard
 ];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -89,7 +91,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [user, loading, pathname, router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, refresh: async () => { await loadUser(); } }}>
+    <AuthContext.Provider value={{ user, loading, refresh: async () => { await loadUser(); }, isSuperAdmin: checkSuperAdmin(user) }}>
       {children}
     </AuthContext.Provider>
   );
