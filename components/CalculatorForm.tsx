@@ -65,7 +65,8 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const [showSettings, setShowSettings] = useState(false);
   const [capital,      setCapital]      = useState("100000");
   const [riskPercent,  setRiskPercent]  = useState("1");
-  const [rrRatio,      setRrRatio]      = useState("2");
+  const [riskRatio,    setRiskRatio]    = useState("1");
+  const [rewardRatio,  setRewardRatio]  = useState("2");
   const [ltp,        setLtp]        = useState<number | null>(null);
   const [ltpLoading, setLtpLoading] = useState(false);
   const [ltpError,   setLtpError]   = useState<string | null>(null);
@@ -153,7 +154,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     onSubmit({
       ticker: ticker.trim(), stopLoss: parseFloat(stopLoss),
       capital: parseFloat(capital), riskPercent: parseFloat(riskPercent),
-      rrRatio: parseFloat(rrRatio),
+      riskRatio: parseFloat(riskRatio), rewardRatio: parseFloat(rewardRatio),
       entryPrice: parseFloat(entryPrice),
     });
   }
@@ -221,13 +222,15 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                 <p className="text-xs text-slate-400 dark:text-slate-600">Max % of capital to risk per trade</p>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">R:R Ratio</label>
-                <div className="relative">
-                  <input type="number" value={rrRatio} onChange={e => setRrRatio(e.target.value)}
-                    className={inputClass + " pr-12"} placeholder="e.g. 2" min="0.1" step="0.1"/>
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">: 1</span>
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Risk:Reward Ratio</label>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <input type="number" value={riskRatio} onChange={e => setRiskRatio(e.target.value)}
+                    className={inputClass} aria-label="Risk side of ratio" placeholder="1" min="0.1" step="0.1"/>
+                  <span className="text-slate-400 text-sm">:</span>
+                  <input type="number" value={rewardRatio} onChange={e => setRewardRatio(e.target.value)}
+                    className={inputClass} aria-label="Reward side of ratio" placeholder="2" min="0.1" step="0.1"/>
                 </div>
-                <p className="text-xs text-slate-400 dark:text-slate-600">Minimum reward vs risk per trade</p>
+                <p className="text-xs text-slate-400 dark:text-slate-600">Risk vs reward per trade — defaults to 1:2</p>
               </div>
               <button type="button" onClick={() => setShowSettings(false)}
                 className="w-full rounded-lg bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-xs

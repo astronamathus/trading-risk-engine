@@ -8,7 +8,8 @@ export interface CalculatorInputs {
   stopLoss:    number;
   capital:     number;
   riskPercent: number;
-  rrRatio:     number;   // reward side of 1:R, e.g. 2 → target = entry + 2 × riskPerShare
+  riskRatio:   number;   // risk side of R:R, defaults to 1
+  rewardRatio: number;   // reward side of R:R, defaults to 2
   entryPrice:  number;
 }
 
@@ -18,8 +19,10 @@ export interface CalculationResult {
   maxRiskAmount:   number;
   positionSize:    number;
   capitalRequired: number;
-  target:          number;  // entry + rrRatio × riskPerShare
-  rrRatio:         number;
+  target:          number;  // entry + (rewardRatio / riskRatio) × riskPerShare
+  riskRatio:       number;
+  rewardRatio:     number;
+  rrRatio:         number;  // derived reward/risk multiplier
 }
 
 export type StockPriceResponse =
