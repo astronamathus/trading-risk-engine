@@ -10,6 +10,7 @@
 //   - "Join an organisation" option above Sign out for
 //     non-admin org members and indie users
 //   - Super admins see "Super Admin" nav link + dropdown section
+//   - Sign in button highlighted as solid blue CTA
 // ============================================================
 
 import Link                      from "next/link";
@@ -123,15 +124,14 @@ export default function NavBar() {
     user?.userType === "indie"      ? { label: "Indie",  style: "border-blue-800  text-blue-400  bg-blue-900/20"   } :
     null;
 
-  // Adapt nav colours to light/dark
-  const navBg     = "bg-white dark:bg-[#0d1117]";
-  const navBorder = "border-slate-200 dark:border-slate-800";
-  const brandTxt  = "text-slate-700 dark:text-slate-300";
-  const linkBase  = "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-100 dark:hover:bg-slate-800";
+  const navBg      = "bg-white dark:bg-[#0d1117]";
+  const navBorder  = "border-slate-200 dark:border-slate-800";
+  const brandTxt   = "text-slate-700 dark:text-slate-300";
+  const linkBase   = "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800";
   const linkActive = "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100";
-  const dropBg    = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700";
-  const dropItem  = "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-100 dark:hover:bg-slate-800";
-  const divider   = "border-slate-100 dark:border-slate-800";
+  const dropBg     = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700";
+  const dropItem   = "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800";
+  const divider    = "border-slate-100 dark:border-slate-800";
 
   return (
     <nav className={`flex items-center justify-between px-6 py-3 border-b ${navBg} ${navBorder}`}>
@@ -290,7 +290,6 @@ export default function NavBar() {
                       </svg>
                       Create org
                     </Link>
-                    {/* Org switcher — only if super admin owns 2+ orgs */}
                     {ownedOrgs.length > 1 && (
                       <>
                         <p className="px-3 pt-2 pb-1 text-xs text-purple-400 uppercase tracking-wider font-medium">
@@ -323,7 +322,7 @@ export default function NavBar() {
                   </button>
                 )}
 
-                {/* ── Theme picker ── */}
+                {/* Theme picker */}
                 <div className={`border-t ${divider} my-1`}/>
                 <div className="px-3 py-1.5">
                   <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
@@ -341,7 +340,7 @@ export default function NavBar() {
                             text-xs transition-colors ${
                             active
                               ? "bg-blue-600 text-white"
-                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
                           }`}
                         >
                           <Icon className="w-3.5 h-3.5"/>
@@ -374,7 +373,8 @@ export default function NavBar() {
           </div>
         ) : (
           <Link href="/auth"
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${linkBase}`}>
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors
+              bg-blue-600 hover:bg-blue-500 text-white shadow-sm">
             Sign in
           </Link>
         )}

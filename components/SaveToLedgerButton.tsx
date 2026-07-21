@@ -37,9 +37,29 @@ export default function SaveToLedgerButton({
     displayedCapReq > 0 &&
     displayedCapReq > availableCapital;
 
-  async function handleSave() {
-    if (!userId) return;
+  // Not signed in — show a sign-in prompt instead of a broken disabled button
+  if (!userId) {
+    return (
+      <div className="flex flex-col gap-2">
+        <a href="/auth"
+          className="w-full rounded-lg border border-blue-500 bg-blue-600 px-4 py-2.5
+            text-sm font-semibold text-white hover:bg-blue-500 transition-colors
+            flex items-center justify-center gap-2">
+          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>
+            <path d="M10 5l3 3-3 3M13 8H6"/>
+          </svg>
+          Sign in to save trades
+        </a>
+        <p className="text-xs text-center text-slate-400 dark:text-slate-500">
+          Create a free account to track your trades
+        </p>
+      </div>
+    );
+  }
 
+  async function handleSave() {
     if (insufficient) {
       setToast("insufficient");
       setTimeout(() => setToast("idle"), 4000);
@@ -54,7 +74,6 @@ export default function SaveToLedgerButton({
         entry_price:  result.entryPrice,
         entry_target: isQueued ? result.entryPrice : undefined,
         stop_loss:    parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
-        target:       result.target,
         quantity:     displayedQty,
         risk_amount:  displayedRisk,
         capital:      totalCapital,
