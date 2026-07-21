@@ -256,3 +256,27 @@ export async function toggleLeaderboardVisibility(
   if (error) throw new Error(error.message);
   if (!data?.ok) throw new Error(data?.error ?? "Failed to update leaderboard visibility");
 }
+// ── Multi-org support ─────────────────────────────────────────
+
+/** Returns all orgs the user is a member of, oldest first. */
+export async function getUserOrgs(userId: string): Promise<Organisation[]> {
+  const { data, error } = await supabase
+    .from("org_memberships")
+    .select("org_id, organisations(*)")
+    .eq("user_id", userId)
+    .order("joined_at", { ascending: true });
+
+  if (error || !data) return [];
+  return data
+    .map((r: any) => r.organisations)
+    .filter(Boolean) as Organisation[];
+}
+
+/** Super admin switches which org they're currently managing. */
+export async function setActiveOrg(orgId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("super_admin_set_active_org", {
+    p_org_id: orgId,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Failed to switch org");
+}

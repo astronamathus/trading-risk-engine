@@ -1,13 +1,12 @@
 // ============================================================
 // lib/auth.ts
 // Auth helpers built on Supabase Auth.
-// Changes vs original:
-//   - ensureAuthUser now saves display_name + avatar_url on
-//     trader_users so leaderboard can show real names/avatars
-//     without needing the admin API
-//   - orgId retained on AppUser for backwards-compat routing
-//   - isSuperAdmin(user) helper — role === "admin" check in
-//     one place so nothing hardcodes the string elsewhere
+// Changes:
+//   - ensureAuthUser saves display_name + avatar_url on every login
+//   - orgId retained for backwards-compat routing
+//   - activeOrgId: which org the super admin is currently acting as
+//   - orgIds: all orgs the user is a member of (multi-org support)
+//   - isSuperAdmin(user) helper — single source of truth
 // ============================================================
 
 import { supabase } from "./supabase";
@@ -20,7 +19,9 @@ export interface AppUser {
   avatarUrl:   string | null;
   role:        "user" | "admin";
   userType:    "indie" | "org_member" | "org_admin" | null;
-  orgId:       string | null;
+  orgId:       string | null;   // active org (legacy compat + active_org_id)
+  activeOrgId: string | null;   // explicit switcher selection
+  orgIds:      string[];        // all orgs this user owns/belongs to
   currency:    "INR" | "USD";
 }
 
@@ -51,14 +52,14 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
   const session = await getSession();
   if (!session?.user) return null;
 
-  const authUser    = session.user;
-  const email       = authUser.email ?? "";
-  const name        = authUser.user_metadata?.full_name ?? email;
-  const avatar      = authUser.user_metadata?.avatar_url ?? null;
+  const authUser = session.user;
+  const email    = authUser.email ?? "";
+  const name     = authUser.user_metadata?.full_name ?? email;
+  const avatar   = authUser.user_metadata?.avatar_url ?? null;
 
   const { data: existing } = await supabase
     .from("trader_users")
-    .select("id, role, user_type, org_id, currency")
+    .select("id, role, user_type, org_id, active_org_id, currency")
     .eq("auth_user_id", authUser.id)
     .single();
 
@@ -71,16 +72,24 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
 
     if (anonymousId) await migrateAnonymousTrades(anonymousId, existing.id);
 
+    // Fetch all org memberships
+    const orgIds = await fetchOrgIds(existing.id);
+
+    // activeOrgId: prefer explicit selection, else first membership
+    const activeOrgId = existing.active_org_id ?? orgIds[0] ?? null;
+
     return {
-      id:        existing.id,
-      authId:    authUser.id,
+      id:          existing.id,
+      authId:      authUser.id,
       email,
       name,
-      avatarUrl: avatar,
-      role:      existing.role as "user" | "admin",
-      userType:  existing.user_type as AppUser["userType"],
-      orgId:     existing.org_id ?? null,
-      currency:  (existing.currency as "INR" | "USD") ?? "INR",
+      avatarUrl:   avatar,
+      role:        existing.role as "user" | "admin",
+      userType:    existing.user_type as AppUser["userType"],
+      orgId:       activeOrgId,
+      activeOrgId: existing.active_org_id ?? null,
+      orgIds,
+      currency:    (existing.currency as "INR" | "USD") ?? "INR",
     };
   }
 
@@ -94,7 +103,7 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
       avatar_url:   avatar,
       user_type:    null,
     })
-    .select("id, role, user_type, org_id")
+    .select("id, role, user_type, org_id, active_org_id")
     .single();
 
   if (error || !created) throw new Error(`Failed to create user: ${error?.message}`);
@@ -102,16 +111,27 @@ export async function ensureAuthUser(anonymousId?: string): Promise<AppUser | nu
   if (anonymousId) await migrateAnonymousTrades(anonymousId, created.id);
 
   return {
-    id:        created.id,
-    authId:    authUser.id,
+    id:          created.id,
+    authId:      authUser.id,
     email,
     name,
-    avatarUrl: avatar,
-    role:      created.role as "user" | "admin",
-    userType:  null,
-    orgId:     null,
-    currency:  "INR" as const,
+    avatarUrl:   avatar,
+    role:        created.role as "user" | "admin",
+    userType:    null,
+    orgId:       null,
+    activeOrgId: null,
+    orgIds:      [],
+    currency:    "INR" as const,
   };
+}
+
+async function fetchOrgIds(userId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from("org_memberships")
+    .select("org_id")
+    .eq("user_id", userId)
+    .order("joined_at", { ascending: true });
+  return (data ?? []).map((r: { org_id: string }) => r.org_id);
 }
 
 async function migrateAnonymousTrades(anonymousId: string, realUserId: string): Promise<void> {

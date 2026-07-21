@@ -230,7 +230,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
                   <input type="number" value={rewardRatio} onChange={e => setRewardRatio(e.target.value)}
                     className={inputClass} aria-label="Reward side of ratio" placeholder="2" min="0.1" step="0.1"/>
                 </div>
-                <p className="text-xs text-slate-400 dark:text-slate-600">Risk vs reward per trade — defaults to 1:2</p>
+                <p className="text-xs text-slate-400 dark:text-slate-600">Minimum reward vs risk per trade</p>
               </div>
               <button type="button" onClick={() => setShowSettings(false)}
                 className="w-full rounded-lg bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-xs

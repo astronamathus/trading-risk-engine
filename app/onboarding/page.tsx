@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth }      from "@/components/AuthProvider";
 import { setIndieUser, createOrganisation } from "@/lib/db/org";
@@ -59,7 +59,7 @@ function CurrencyPicker({ value, onChange }: {
 }
 
 function OnboardingInner() {
-  const { user, refresh } = useAuth();
+  const { user, refresh, isSuperAdmin } = useAuth();
   const router            = useRouter();
   const searchParams      = useSearchParams();
 
@@ -74,6 +74,11 @@ function OnboardingInner() {
   const [error,      setError]      = useState<string | null>(null);
 
   const firstName = user?.name?.split(" ")[0] ?? "";
+
+  // Super admins never need onboarding — bounce them back
+  useEffect(() => {
+    if (isSuperAdmin) router.replace("/super");
+  }, [isSuperAdmin, router]);
 
   async function handleIndie() {
     if (!user) return;

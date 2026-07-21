@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter }   from "next/navigation";
+import { OrgSwitcher, useOwnedOrgs } from "@/components/OrgSwitcher";
 import { useAuth }     from "@/components/AuthProvider";
 import { supabase }    from "@/lib/supabase";
 import {
@@ -200,7 +201,7 @@ function CapitalModal({ member, orgId, onDone, onCancel }: {
 type Tab = "members" | "groups";
 
 export default function OrgSettingsPage() {
-  const { user, loading: authLoading, refresh } = useAuth();
+  const { user, loading: authLoading, refresh, isSuperAdmin, activeOrgId } = useAuth();
   const router = useRouter();
 
   const [tab,     setTab]     = useState<Tab>("members");
@@ -239,6 +240,7 @@ export default function OrgSettingsPage() {
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editName,     setEditName]     = useState("");
 
+  const { orgs: ownedOrgs } = useOwnedOrgs(user?.id, isSuperAdmin);
   const myRole  = members.find(m => m.id === user?.id)?.org_role;
   const isOwner = myRole === "owner";
   const isAdmin = myRole === "owner" || myRole === "admin";
@@ -503,6 +505,11 @@ export default function OrgSettingsPage() {
                   <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white truncate">
                     {org?.name}
                   </h1>
+                  {isSuperAdmin && ownedOrgs.length > 1 && (
+                    <div className="ml-2">
+                      <OrgSwitcher orgs={ownedOrgs} activeOrgId={activeOrgId}/>
+                    </div>
+                  )}
                   {isOwner && (
                     <button onClick={() => setEditingName(true)}
                       className="p-1.5 rounded-lg text-slate-400 dark:text-slate-600 hover:text-slate-700 dark:text-slate-300

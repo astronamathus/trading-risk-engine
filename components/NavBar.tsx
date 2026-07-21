@@ -19,6 +19,7 @@ import { useTheme }               from "@/components/ThemeProvider";
 import type { Theme }             from "@/components/ThemeProvider";
 import { signOut }                from "@/lib/auth";
 import { useState, useRef, useEffect } from "react";
+import { OrgSwitcher, useOwnedOrgs } from "@/components/OrgSwitcher";
 
 const NAV_LINKS = [
   { href: "/",          label: "Trade" },
@@ -86,6 +87,8 @@ export default function NavBar() {
   const [menuOpen,   setMenuOpen]   = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const { orgs: ownedOrgs } = useOwnedOrgs(user?.id, isSuperAdmin);
+  const { activeOrgId }     = useAuth();
   const isOrgAdmin  = user?.userType === "org_admin";
   const isOrgMember = user?.userType === "org_member" || isOrgAdmin;
   const canJoinOrg  = user && !isOrgAdmin;
@@ -287,6 +290,19 @@ export default function NavBar() {
                       </svg>
                       Create org
                     </Link>
+                    {/* Org switcher — only if super admin owns 2+ orgs */}
+                    {ownedOrgs.length > 1 && (
+                      <>
+                        <p className="px-3 pt-2 pb-1 text-xs text-purple-400 uppercase tracking-wider font-medium">
+                          Switch org
+                        </p>
+                        <OrgSwitcher
+                          orgs={ownedOrgs}
+                          activeOrgId={activeOrgId}
+                          onSwitch={() => setMenuOpen(false)}
+                        />
+                      </>
+                    )}
                     <div className={`border-t ${divider} my-1`}/>
                   </>
                 )}
