@@ -31,9 +31,13 @@ function Field({ label, hint, children }: {
 export function ExchangeBadge({ exchange }: { exchange: "NSE" | "BSE" | "NYSE" | "NASDAQ" }) {
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
-      exchange === "NSE" || exchange === "NASDAQ"
+      exchange === "NSE"
         ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
-        : "border-amber-500  text-amber-600  dark:text-amber-400  bg-amber-50  dark:bg-amber-900/30"
+        : exchange === "BSE"
+          ? "border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30"
+          : exchange === "NASDAQ"
+            ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30"
+            : "border-violet-500 text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30"
     }`}>
       {exchange}
     </span>
