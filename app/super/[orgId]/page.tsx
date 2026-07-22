@@ -10,6 +10,7 @@
 // ============================================================
 
 import { useState, useEffect, useCallback } from "react";
+import { useAuth }    from "@/components/AuthProvider";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -32,8 +33,9 @@ interface MemberRow {
   org_role:      "owner" | "admin" | "member";
   capital_limit: number;
   joined_at:     string;
-  group_id:      string | null;
-  group_name:    string | null;
+  group_id:        string | null;
+  group_name:      string | null;
+  is_super_admin:  boolean;
 }
 
 interface GroupRow {
@@ -45,9 +47,9 @@ interface GroupRow {
 // ── Shared styles ─────────────────────────────────────────────
 
 const ROLE_BADGE: Record<string, string> = {
-  owner:  "border-purple-700 text-purple-400 bg-purple-900/20",
-  admin:  "border-amber-700  text-amber-400  bg-amber-900/20",
-  member: "border-slate-300 dark:border-slate-600 text-slate-400 bg-slate-100/40 dark:bg-slate-800/40",
+  owner:  "border-purple-400 dark:border-purple-700 text-purple-700 dark:text-purple-400 bg-purple-100/60 dark:bg-purple-900/20",
+  admin:  "border-amber-400  dark:border-amber-700  text-amber-700  dark:text-amber-400  bg-amber-100/60  dark:bg-amber-900/20",
+  member: "border-slate-300  dark:border-slate-600  text-slate-500  dark:text-slate-400  bg-slate-100/60  dark:bg-slate-800/40",
 };
 const ROLE_LABELS: Record<string, string> = {
   owner: "Owner", admin: "Admin", member: "Trader",
@@ -125,6 +127,13 @@ export default function SuperAdminOrgDetailPage() {
   const router          = useRouter();
   const { orgId }       = useParams<{ orgId: string }>();
 
+  const { isSuperAdmin, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isSuperAdmin) router.replace("/dashboard");
+  }, [isSuperAdmin, authLoading, router]);
+
   const [org,      setOrg]      = useState<OrgDetail | null>(null);
   const [members,  setMembers]  = useState<MemberRow[]>([]);
   const [groups,   setGroups]   = useState<GroupRow[]>([]);
@@ -132,10 +141,14 @@ export default function SuperAdminOrgDetailPage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [showDel,  setShowDel]  = useState(false);
+  const [showDel,      setShowDel]      = useState(false);
+  const [coOwnerEmail, setCoOwnerEmail] = useState("");
+  const [assigning,    setAssigning]    = useState(false);
+  const [assignErr,    setAssignErr]    = useState<string | null>(null);
+  const [assignOk,     setAssignOk]     = useState(false);
 
   const load = useCallback(async () => {
-    if (!orgId) return;
+if (!orgId) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -153,7 +166,10 @@ export default function SuperAdminOrgDetailPage() {
     }
   }, [orgId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+if (authLoading || !isSuperAdmin || !orgId) return;
+    load();
+  }, [authLoading, isSuperAdmin, orgId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDelete() {
     if (!orgId) return;
@@ -171,7 +187,27 @@ export default function SuperAdminOrgDetailPage() {
     }
   }
 
-  if (loading) return (
+  async function handleAssignCoOwner() {
+    if (!coOwnerEmail.trim() || !orgId) return;
+    setAssigning(true); setAssignErr(null); setAssignOk(false);
+    try {
+      const { data, error: rpcErr } = await supabase.rpc("super_admin_assign_co_owner", {
+        p_org_id: orgId,
+        p_email:  coOwnerEmail.trim().toLowerCase(),
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+      if (!data?.ok) throw new Error(data?.error ?? "Failed to assign");
+      setAssignOk(true);
+      setCoOwnerEmail("");
+      await load();
+    } catch (err) {
+      setAssignErr(err instanceof Error ? err.message : "Failed.");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  if (authLoading || loading) return (
     <main className="flex items-center justify-center min-h-[60vh] gap-3
       text-slate-400 dark:text-slate-500">
       <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24" fill="none">
@@ -218,8 +254,8 @@ export default function SuperAdminOrgDetailPage() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs px-2 py-0.5 rounded-full border border-purple-700
-                  text-purple-400 bg-purple-900/20 font-medium">
+                <span className="text-xs px-2 py-0.5 rounded-full border border-purple-400 dark:border-purple-700
+                  text-purple-700 dark:text-purple-400 bg-purple-100/60 dark:bg-purple-900/20 font-medium">
                   Super Admin
                 </span>
               </div>
@@ -235,7 +271,7 @@ export default function SuperAdminOrgDetailPage() {
             <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500
               bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-2.5">
               <span className="font-semibold text-slate-700 dark:text-slate-300 text-base">
-                {members.length}
+                {members.filter(m => !m.is_super_admin).length}
               </span>
               members ·
               <span className="font-semibold text-slate-700 dark:text-slate-300 text-base">
@@ -278,11 +314,65 @@ export default function SuperAdminOrgDetailPage() {
                 </p>
               ) : (
                 <>
-                  {owners.length  > 0 && <MemberGroup label="Owner"   rows={owners}  currency={org?.currency ?? "INR"}/>}
+                  {/* Super admins shown separately — invisible to regular users */}
+                  {members.filter(m => m.is_super_admin).length > 0 && (
+                    <MemberGroup
+                      label="Super Admin (invisible to members)"
+                      rows={members.filter(m => m.is_super_admin)}
+                      currency={org?.currency ?? "INR"}
+                      dimmed
+                    />
+                  )}
+                  {owners.filter(m => !m.is_super_admin).length > 0 && (
+                    <MemberGroup label="Owner" rows={owners.filter(m => !m.is_super_admin)} currency={org?.currency ?? "INR"}/>
+                  )}
                   {admins.length  > 0 && <MemberGroup label="Admins"  rows={admins}  currency={org?.currency ?? "INR"}/>}
                   {traders.length > 0 && <MemberGroup label="Traders" rows={traders} currency={org?.currency ?? "INR"}/>}
                 </>
               )}
+
+              {/* Co-owner assignment */}
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-5 mt-2 flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Assign co-owner
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    One non-super-admin owner at a time. Replaces any existing co-owner.
+                  </p>
+                </div>
+                {assignOk && (
+                  <div className="rounded-lg border border-emerald-700 bg-emerald-900/20
+                    px-3 py-2 text-xs text-emerald-400">
+                    Co-owner assigned successfully.
+                  </div>
+                )}
+                {assignErr && (
+                  <div className="rounded-lg border border-red-700 bg-red-900/20
+                    px-3 py-2 text-xs text-red-400">
+                    {assignErr}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="user@email.com"
+                    value={coOwnerEmail}
+                    onChange={e => { setCoOwnerEmail(e.target.value); setAssignErr(null); setAssignOk(false); }}
+                    onKeyDown={e => e.key === "Enter" && handleAssignCoOwner()}
+                    className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600
+                      bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100
+                      placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handleAssignCoOwner}
+                    disabled={assigning || !coOwnerEmail.trim()}
+                    className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold
+                      text-white hover:bg-blue-500 transition-colors disabled:opacity-40">
+                    {assigning ? "Assigning…" : "Assign"}
+                  </button>
+                </div>
+              </div>
             </section>
           )}
 
@@ -377,13 +467,14 @@ export default function SuperAdminOrgDetailPage() {
 
 // ── Sub-components ────────────────────────────────────────────
 
-function MemberGroup({ label, rows, currency }: {
-  label: string; rows: MemberRow[]; currency: string;
+function MemberGroup({ label, rows, currency, dimmed }: {
+  label: string; rows: MemberRow[]; currency: string; dimmed?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">
+    <div className={`flex flex-col gap-1 ${dimmed ? "opacity-60" : ""}`}>
+      <p className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center gap-2">
         {label}
+        {dimmed && <span className="text-purple-600 dark:text-purple-400 normal-case tracking-normal font-medium"> only you can see this</span>}
       </p>
       {rows.map(m => <MemberRow key={m.id} member={m} currency={currency}/>)}
     </div>
@@ -413,7 +504,7 @@ function MemberRow({ member: m, currency }: { member: MemberRow; currency: strin
           </span>
           {m.group_name && (
             <span className="shrink-0 text-xs px-1.5 py-0.5 rounded border
-              border-blue-800 text-blue-400 bg-blue-900/20">
+              border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-400 bg-blue-100/60 dark:bg-blue-900/20">
               {m.group_name}
             </span>
           )}

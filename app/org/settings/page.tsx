@@ -14,7 +14,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter }   from "next/navigation";
-import { OrgSwitcher, useOwnedOrgs } from "@/components/OrgSwitcher";
 import { useAuth }     from "@/components/AuthProvider";
 import { supabase }    from "@/lib/supabase";
 import {
@@ -49,9 +48,9 @@ const ROLE_LABELS: Record<string, string> = {
   owner: "Owner", admin: "Admin", member: "Trader",
 };
 const ROLE_BADGE: Record<string, string> = {
-  owner:  "border-purple-700 text-purple-400 bg-purple-900/20",
-  admin:  "border-amber-700  text-amber-400  bg-amber-900/20",
-  member: "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-400 bg-slate-100/40 dark:bg-slate-800/40",
+  owner:  "border-purple-400 dark:border-purple-700 text-purple-700 dark:text-purple-400 bg-purple-100/60 dark:bg-purple-900/20",
+  admin:  "border-amber-400  dark:border-amber-700  text-amber-700  dark:text-amber-400  bg-amber-100/60  dark:bg-amber-900/20",
+  member: "border-slate-300 dark:border-slate-600   text-slate-500  dark:text-slate-400  bg-slate-100/40  dark:bg-slate-800/40",
 };
 
 // ── Icons ─────────────────────────────────────────────────────
@@ -201,7 +200,7 @@ function CapitalModal({ member, orgId, onDone, onCancel }: {
 type Tab = "members" | "groups";
 
 export default function OrgSettingsPage() {
-  const { user, loading: authLoading, refresh, isSuperAdmin, activeOrgId } = useAuth();
+  const { user, loading: authLoading, refresh } = useAuth();
   const router = useRouter();
 
   const [tab,     setTab]     = useState<Tab>("members");
@@ -240,7 +239,6 @@ export default function OrgSettingsPage() {
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editName,     setEditName]     = useState("");
 
-  const { orgs: ownedOrgs } = useOwnedOrgs(user?.id, isSuperAdmin);
   const myRole  = members.find(m => m.id === user?.id)?.org_role;
   const isOwner = myRole === "owner";
   const isAdmin = myRole === "owner" || myRole === "admin";
@@ -268,24 +266,21 @@ export default function OrgSettingsPage() {
         .select("user_id, org_role, trader_users(id, display_name, avatar_url, capital_limit)")
         .eq("org_id", orgData.id);
 
-      // ── Group membership ────────────────────────────────────
-      // Use get_group_leaderboard per group — the same RPC the leaderboard
-      // page uses successfully. It returns rows with user_id for each group.
-      const groupMap: Record<string, { group_id: string; group_name: string }> = {};
+      const groupIds = groupList.map((g: OrgGroup) => g.id);
+      const { data: gmData } = groupIds.length > 0
+        ? await supabase
+            .from("org_group_members")
+            .select("user_id, group_id, org_groups(name)")
+            .in("group_id", groupIds)
+        : { data: [] };
 
-      await Promise.all(
-        groupList.map(async (g: OrgGroup) => {
-          const { data: lbData } = await supabase.rpc("get_group_leaderboard", {
-            p_group_id: g.id,
-            p_sort:     "lifetime_pnl",
-          });
-          if (lbData?.ok && Array.isArray(lbData.rows)) {
-            lbData.rows.forEach((row: { user_id: string }) => {
-              groupMap[row.user_id] = { group_id: g.id, group_name: g.name };
-            });
-          }
-        })
-      );
+      const groupMap: Record<string, { group_id: string; group_name: string }> = {};
+      (gmData ?? []).forEach((gm: any) => {
+        groupMap[gm.user_id] = {
+          group_id:   gm.group_id,
+          group_name: gm.org_groups?.name ?? "",
+        };
+      });
 
       const enriched: OrgMemberWithGroup[] = (mData ?? []).map((m: any) => {
         const tu = Array.isArray(m.trader_users) ? m.trader_users[0] : m.trader_users;
@@ -505,11 +500,6 @@ export default function OrgSettingsPage() {
                   <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white truncate">
                     {org?.name}
                   </h1>
-                  {isSuperAdmin && ownedOrgs.length > 1 && (
-                    <div className="ml-2">
-                      <OrgSwitcher orgs={ownedOrgs} activeOrgId={activeOrgId}/>
-                    </div>
-                  )}
                   {isOwner && (
                     <button onClick={() => setEditingName(true)}
                       className="p-1.5 rounded-lg text-slate-400 dark:text-slate-600 hover:text-slate-700 dark:text-slate-300
@@ -647,7 +637,7 @@ export default function OrgSettingsPage() {
 
               {/* Danger zone */}
               {isOwner && (
-                <section className="rounded-2xl border border-red-900/60 bg-red-950/20 p-6
+                <section className="rounded-2xl border border-red-300 dark:border-red-900/60 bg-red-50 dark:bg-red-950/20 p-6
                   flex flex-col gap-4">
                   <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
                   <div className="flex items-center justify-between gap-4">
@@ -658,8 +648,8 @@ export default function OrgSettingsPage() {
                       </p>
                     </div>
                     <button onClick={() => setShowDelete(true)}
-                      className="shrink-0 rounded-xl border border-red-800 px-4 py-2
-                        text-sm font-medium text-red-400 hover:bg-red-900/30 transition-colors">
+                      className="shrink-0 rounded-xl border border-red-400 dark:border-red-800 px-4 py-2
+                        text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
                       Delete org
                     </button>
                   </div>
@@ -932,24 +922,24 @@ function MemberRow({ member, currentUserId, isLoading, onPromote, onDemote, onRe
         <div className="flex items-center gap-2">
           {onPromote && (
             <button onClick={onPromote}
-              className="text-xs px-2 py-1 rounded-lg border border-amber-700
-                text-amber-400 hover:bg-amber-900/20 transition-colors">
+              className="text-xs px-2 py-1 rounded-lg border border-amber-400 dark:border-amber-700
+                text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-colors">
               Make admin
             </button>
           )}
           {onDemote && (
             <button onClick={onDemote}
               className="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600
-                text-slate-400 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200
-                hover:bg-slate-200 dark:bg-slate-700 transition-colors">
+                text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200
+                hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
               Remove admin
             </button>
           )}
           {onRemove && (
             <button onClick={onRemove}
               className="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600
-                text-slate-400 dark:text-slate-400 hover:text-red-400 hover:border-red-800
-                hover:bg-red-900/20 transition-colors">
+                text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-400 dark:hover:border-red-800
+                hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors">
               Remove
             </button>
           )}

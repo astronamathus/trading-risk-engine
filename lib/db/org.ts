@@ -155,7 +155,25 @@ export async function removeMember(memberId: string, orgId: string): Promise<voi
 // ── Org lookup ───────────────────────────────────────────────
 
 export async function getUserOrg(userId: string): Promise<Organisation | null> {
-  // Try membership table first (source of truth after migration)
+  // Respect active_org_id — this is what the switcher updates
+  const { data: tu } = await supabase
+    .from("trader_users")
+    .select("active_org_id, org_id")
+    .eq("id", userId)
+    .single();
+
+  const targetOrgId = tu?.active_org_id ?? tu?.org_id ?? null;
+
+  if (targetOrgId) {
+    const { data: org } = await supabase
+      .from("organisations")
+      .select("*")
+      .eq("id", targetOrgId)
+      .single();
+    if (org) return org as Organisation;
+  }
+
+  // Final fallback: first membership by joined_at
   const { data: membership } = await supabase
     .from("org_memberships")
     .select("org_id, organisations(*)")
@@ -164,26 +182,7 @@ export async function getUserOrg(userId: string): Promise<Organisation | null> {
     .limit(1)
     .single();
 
-  if (membership?.organisations) {
-    return membership.organisations as unknown as Organisation;
-  }
-
-  // Fallback: legacy org_id column
-  const { data: user } = await supabase
-    .from("trader_users")
-    .select("org_id")
-    .eq("id", userId)
-    .single();
-
-  if (!user?.org_id) return null;
-
-  const { data: org } = await supabase
-    .from("organisations")
-    .select("*")
-    .eq("id", user.org_id)
-    .single();
-
-  return (org as Organisation) ?? null;
+  return (membership?.organisations as unknown as Organisation) ?? null;
 }
 
 // ── Admin trade actions ───────────────────────────────────────

@@ -3,13 +3,15 @@
 // ============================================================
 // app/super/new/page.tsx
 //
-// Super admin: create a new org and assign an existing user
-// as owner by email. Calls super_admin_create_org RPC.
+// Super admin: create a new org for yourself.
+// Calls super_admin_create_org(name, domain, currency) —
+// the 3-param version that creates for the caller directly.
 // ============================================================
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase }  from "@/lib/supabase";
+import { useAuth }   from "@/components/AuthProvider";
 
 const inputClass =
   "rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 " +
@@ -17,32 +19,37 @@ const inputClass =
   "focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm w-full";
 
 export default function SuperAdminNewOrgPage() {
-  const router = useRouter();
+  const router           = useRouter();
+  const { refresh, isSuperAdmin, loading: authLoading } = useAuth();
 
-  const [name,       setName]       = useState("");
-  const [ownerEmail, setOwnerEmail] = useState("");
-  const [domain,     setDomain]     = useState("");
-  const [currency,   setCurrency]   = useState<"INR" | "USD">("INR");
-  const [saving,     setSaving]     = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
+  const [name,     setName]     = useState("");
+  const [domain,   setDomain]   = useState("");
+  const [currency, setCurrency] = useState<"INR" | "USD">("INR");
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isSuperAdmin) router.replace("/dashboard");
+  }, [isSuperAdmin, authLoading, router]);
+
+  if (authLoading) return null;
+  if (!isSuperAdmin) return null;
 
   async function handleCreate() {
-    if (!name.trim() || !ownerEmail.trim()) {
-      setError("Org name and owner email are required.");
-      return;
-    }
+    if (!name.trim()) { setError("Org name is required."); return; }
     setSaving(true);
     setError(null);
     try {
       const { data, error: rpcErr } = await supabase.rpc("super_admin_create_org", {
-        p_name:        name.trim(),
-        p_owner_email: ownerEmail.trim().toLowerCase(),
-        p_domain:      domain.trim() || null,
-        p_currency:    currency,
+        p_name:     name.trim(),
+        p_domain:   domain.trim() || null,
+        p_currency: currency,
       });
       if (rpcErr) throw new Error(rpcErr.message);
       if (!data?.ok) throw new Error(data?.error ?? "Failed to create org");
-      // Navigate to the new org's detail page
+      // Refresh auth so activeOrgId + orgIds update immediately
+      await refresh();
       router.push(`/super/${data.org_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create.");
@@ -64,7 +71,7 @@ export default function SuperAdminNewOrgPage() {
               strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10 4L6 8l4 4"/>
             </svg>
-            All orgs
+            My orgs
           </button>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs px-2 py-0.5 rounded-full border border-purple-700
@@ -76,7 +83,7 @@ export default function SuperAdminNewOrgPage() {
             Create Organisation
           </h1>
           <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">
-            The owner must already have signed in at least once.
+            A new org under your account. You'll be set as owner.
           </p>
         </div>
 
@@ -103,24 +110,6 @@ export default function SuperAdminNewOrgPage() {
               autoFocus
               className={inputClass}
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400
-              uppercase tracking-wider">
-              Owner email <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="email"
-              placeholder="owner@firm.com"
-              value={ownerEmail}
-              onChange={e => { setOwnerEmail(e.target.value); setError(null); }}
-              onKeyDown={e => e.key === "Enter" && handleCreate()}
-              className={inputClass}
-            />
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Must match the email they used to sign in with Google.
-            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -174,7 +163,7 @@ export default function SuperAdminNewOrgPage() {
           </button>
           <button
             onClick={handleCreate}
-            disabled={saving || !name.trim() || !ownerEmail.trim()}
+            disabled={saving || !name.trim()}
             className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold
               text-white hover:bg-blue-500 transition-colors disabled:opacity-40">
             {saving ? "Creating…" : "Create organisation"}
