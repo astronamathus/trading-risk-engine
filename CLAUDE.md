@@ -109,6 +109,13 @@ await supabase.from("org_group_members").select("user_id, group_id").eq("org_id"
 6. `006_org_delete_and_rename.sql` — `delete_organisation` and `rename_organisation` RPCs
 7. `007_leaderboard_optin.sql` — `on_leaderboard` column, `toggle_leaderboard_visibility` RPC
 8. `008_groups.sql` — `org_groups`, `org_group_members` tables + all group RPCs
+9. `009_super_admin.sql` — `org_groups`, `org_group_members` Adds three SECURITY DEFINER RPCs for platform-level super admin.
+10. `010_super_admin.sql` — `org_groups`, `org_group_members` Backfill role = 'admin' for all existing org owners
+11. `011_scope_super_admin_to_own_orgs.sql` — `org_groups`, `org_group_members` Replaces the four super_admin_* RPCs so they only operate on orgs the caller is a member of. Super admins are multi-org owners — not platform gods with access to everyone's data.
+12. `012_co_owner_and_invisibility.sql` — `org_groups`, `org_group_members` exclude super admins (role = 'admin') so they're invisible to regular members, org owners, and the leaderboard.
+13. `013_fix_set_active_org.sql` — `org_groups`, `org_group_members` Fixes: "new row for relation trader_users violates check constraint trader_users_org_role_check"
+14. `014_fix_delete_org.sql` — `org_groups`, `org_group_members` Fixes: "new row for relation trader_users violates check constraint trader_users_org_role_check"
+15. `015_fix_delete_org_fk.sql` — `org_groups`, `org_group_members` Fixes: "update or delete on table organisations violates foreign key constraint trader_users_org_id_fkey"
 
 ### Recommended indexes (not yet applied — add when ledger grows)
 ```sql
