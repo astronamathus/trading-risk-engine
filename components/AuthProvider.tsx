@@ -47,11 +47,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }
 
   useEffect(() => {
-    loadUser();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event) => {
-        if (event === "SIGNED_IN") {
+        if (["INITIAL_SESSION", "SIGNED_IN", "TOKEN_REFRESHED"].includes(event)) {
           const appUser = await loadUser();
           // After sign-in, redirect based on onboarding state
           if (appUser && appUser.userType === null) {

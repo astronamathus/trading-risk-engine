@@ -26,7 +26,6 @@ export default function OrgSetupPage() {
     try {
       await createOrganisation(
         name.trim(),
-        user.id,
         domain.trim() || undefined,
       );
       router.replace("/org/settings");
@@ -45,7 +44,7 @@ export default function OrgSetupPage() {
             Create your organisation
           </h1>
           <p className="text-sm text-slate-400">
-            You'll be the admin. You can invite traders and co-admins from settings.
+            You&apos;ll be the admin. You can invite traders and co-admins from settings.
           </p>
         </div>
 

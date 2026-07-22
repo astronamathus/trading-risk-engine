@@ -39,27 +39,17 @@ export interface OrgMember {
  * Creates a new organisation and sets the current user as admin.
  */
 export async function createOrganisation(
-  name:      string,
-  userId:    string,
-  domain?:   string,
+  name:    string,
+  domain?: string,
 ): Promise<Organisation> {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-  const { data: org, error: orgError } = await supabase
-    .from("organisations")
-    .insert({ name, slug: `${slug}-${Date.now()}`, domain: domain ?? null })
-    .select()
+  const { data: org, error } = await supabase
+    .rpc("create_organisation_for_current_user", {
+      p_name:   name,
+      p_domain: domain ?? null,
+    })
     .single();
 
-  if (orgError || !org) throw new Error(`Failed to create org: ${orgError?.message}`);
-
-  // Set user as org admin
-  const { error: userError } = await supabase
-    .from("trader_users")
-    .update({ org_id: org.id, org_role: "admin", user_type: "org_admin" })
-    .eq("id", userId);
-
-  if (userError) throw new Error(`Failed to set admin: ${userError.message}`);
+  if (error || !org) throw new Error(`Failed to create org: ${error?.message}`);
 
   return org as Organisation;
 }

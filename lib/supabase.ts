@@ -13,4 +13,11 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error("Missing Supabase env vars. Check .env.local");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    flowType:          "pkce",
+    persistSession:    true,
+    autoRefreshToken:  true,
+    detectSessionInUrl: true,
+  },
+});

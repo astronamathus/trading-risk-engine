@@ -30,7 +30,7 @@ export default function OrgNewPage() {
     setLoading(true);
     setError(null);
     try {
-      await createOrganisation(name.trim(), user.id, domain.trim() || undefined);
+      await createOrganisation(name.trim(), domain.trim() || undefined);
       await refresh();                   // reload AppUser with new userType/orgId
       router.replace("/org/settings");
     } catch (err) {
@@ -48,7 +48,7 @@ export default function OrgNewPage() {
             Create your organisation
           </h1>
           <p className="text-sm text-slate-400">
-            You'll be the owner. Invite traders and co-admins from settings.
+            You&apos;ll be the owner. Invite traders and co-admins from settings.
           </p>
         </div>
 

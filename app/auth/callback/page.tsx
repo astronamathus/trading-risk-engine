@@ -3,9 +3,8 @@
 // ============================================================
 // app/auth/callback/page.tsx
 // Handles the OAuth redirect from Supabase/Google.
-// Supabase returns the session as a URL fragment (#access_token=...)
-// which only the browser can read — so this must be a client page,
-// not a server route.ts.
+// Supabase PKCE redirects back with a ?code=... value.
+// Exchange it in the browser so the Supabase client can persist the session.
 // ============================================================
 
 import { useEffect } from "react";
@@ -16,18 +15,23 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Supabase client automatically reads the #access_token fragment
-    // and sets the session when getSession() is called.
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (session) {
-        // Session established — go to dashboard
-        router.replace("/dashboard");
-      } else {
-        // No session — back to auth with error
+    async function finishSignIn() {
+      const code = new URLSearchParams(window.location.search).get("code");
+
+      const { data: { session }, error } = code
+        ? await supabase.auth.exchangeCodeForSession(code)
+        : await supabase.auth.getSession();
+
+      if (error || !session) {
         console.error("Auth callback error:", error);
         router.replace("/auth?error=oauth_failed");
+        return;
       }
-    });
+
+      router.replace("/dashboard");
+    }
+
+    void finishSignIn();
   }, [router]);
 
   return (
