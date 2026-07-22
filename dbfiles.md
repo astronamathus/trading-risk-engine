@@ -1,3 +1,683 @@
+# 002
+-- ============================================================
+-- migrations/002_fix_rls_recursion.sql
+--
+-- Fixes infinite recursion in RLS policies caused by
+-- auth_trader_id() querying trader_users inside a policy
+-- that itself fires on trader_users.
+--
+-- Root cause:
+--   auth_trader_id() does:
+--     SELECT id FROM trader_users WHERE auth_user_id = auth.uid()
+--   trader_users RLS policies call auth_trader_id()
+--   → trader_users policy fires again → infinite loop
+--
+-- Fix:
+--   1. trader_users policies use auth_user_id = auth.uid() directly
+--      (no function call, no recursion)
+--   2. org_memberships policies use a security-definer view
+--      (auth_org_roles) so they never re-enter the policy system
+--   3. All other table policies (trades, organisations, etc.)
+--      keep using auth_trader_id() — safe because those tables
+--      have no policy that loops back through trader_users
+-- ============================================================
+
+
+-- ============================================================
+-- 1. TRADER_USERS — rewrite without auth_trader_id()
+--    Use auth_user_id = auth.uid() directly to avoid recursion.
+-- ============================================================
+alter table trader_users enable row level security;
+
+drop policy if exists "own_user_read"          on trader_users;
+drop policy if exists "own_user_update"        on trader_users;
+drop policy if exists "org_admin_read_members" on trader_users;
+
+-- Own row: compare auth column directly, no helper function
+create policy "own_user_read" on trader_users
+  for select to authenticated
+  using (auth_user_id = auth.uid());
+
+create policy "own_user_update" on trader_users
+  for update to authenticated
+  using  (auth_user_id = auth.uid())
+  with check (auth_user_id = auth.uid());
+
+-- Admins read member rows: join through org_memberships but
+-- identify caller by auth_user_id directly (not via function)
+create policy "org_admin_read_members" on trader_users
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from org_memberships caller_m          -- caller's membership
+      join trader_users    caller_u          -- caller's trader_users row
+        on caller_u.id = caller_m.user_id
+      join org_memberships target_m          -- target's membership
+        on target_m.org_id = caller_m.org_id
+      where caller_u.auth_user_id = auth.uid()
+        and caller_m.org_role in ('owner', 'admin')
+        and target_m.user_id = trader_users.id
+    )
+  );
+
+
+-- ============================================================
+-- 2. SECURITY-DEFINER VIEW for org membership lookup
+--    Policies on org_memberships cannot safely call
+--    auth_trader_id() (which reads trader_users) because
+--    trader_users policies now use auth.uid() directly but
+--    org_memberships policies still need to know the caller's
+--    user_id.  A security-definer view bypasses RLS entirely.
+-- ============================================================
+create or replace view auth_org_roles
+  with (security_invoker = false)   -- security definer behaviour
+as
+  select om.org_id, om.org_role
+  from   org_memberships om
+  join   trader_users    tu on tu.id = om.user_id
+  where  tu.auth_user_id = auth.uid();
+
+-- Grant to authenticated so policies can reference it
+grant select on auth_org_roles to authenticated;
+
+
+-- ============================================================
+-- 3. ORG_MEMBERSHIPS — rewrite using auth_org_roles view
+-- ============================================================
+alter table org_memberships enable row level security;
+
+drop policy if exists "own_memberships_read"        on org_memberships;
+drop policy if exists "admin_read_org_memberships"  on org_memberships;
+drop policy if exists "no_direct_membership_write"  on org_memberships;
+
+-- Users see their own membership rows
+create policy "own_memberships_read" on org_memberships
+  for select to authenticated
+  using (
+    user_id = (
+      select id from trader_users
+      where auth_user_id = auth.uid()
+      limit 1
+    )
+  );
+
+-- Admins see all memberships in orgs they admin
+create policy "admin_read_org_memberships" on org_memberships
+  for select to authenticated
+  using (
+    org_id in (
+      select org_id from auth_org_roles
+      where org_role in ('owner', 'admin')
+    )
+  );
+
+-- All writes go through security-definer RPCs only
+create policy "no_direct_membership_write" on org_memberships
+  for all to authenticated
+  using (false) with check (false);
+
+
+-- ============================================================
+-- 4. ORGANISATIONS — rewrite using auth_org_roles view
+-- ============================================================
+alter table organisations enable row level security;
+
+drop policy if exists "org_members_read"  on organisations;
+drop policy if exists "org_insert"        on organisations;
+drop policy if exists "org_admin_update"  on organisations;
+
+create policy "org_insert" on organisations
+  for insert to authenticated
+  with check (true);
+
+create policy "org_members_read" on organisations
+  for select to authenticated
+  using (
+    id in (select org_id from auth_org_roles)
+  );
+
+create policy "org_admin_update" on organisations
+  for update to authenticated
+  using (
+    id in (
+      select org_id from auth_org_roles
+      where org_role in ('owner', 'admin')
+    )
+  );
+
+
+-- ============================================================
+-- 5. ORG_INVITES — rewrite using auth_org_roles view
+-- ============================================================
+alter table org_invites enable row level security;
+
+drop policy if exists "admin_manage_invites" on org_invites;
+drop policy if exists "read_invite_by_code"  on org_invites;
+
+create policy "admin_manage_invites" on org_invites
+  for all to authenticated
+  using (
+    org_id in (
+      select org_id from auth_org_roles
+      where org_role in ('owner', 'admin')
+    )
+  )
+  with check (
+    org_id in (
+      select org_id from auth_org_roles
+      where org_role in ('owner', 'admin')
+    )
+  );
+
+create policy "read_invite_by_code" on org_invites
+  for select to authenticated
+  using (true);
+
+
+-- ============================================================
+-- 6. TRADES — rewrite using auth_org_roles view
+-- ============================================================
+alter table trades enable row level security;
+
+drop policy if exists "own_trades_read"          on trades;
+drop policy if exists "own_trades_insert"         on trades;
+drop policy if exists "own_trades_update"         on trades;
+drop policy if exists "admin_org_trades_read"     on trades;
+drop policy if exists "admin_org_trades_update"   on trades;
+drop policy if exists "no_hard_delete_trades"     on trades;
+
+create policy "own_trades_read" on trades
+  for select to authenticated
+  using (
+    user_id = auth_trader_id()
+    and deleted_at is null
+  );
+
+create policy "own_trades_insert" on trades
+  for insert to authenticated
+  with check (user_id = auth_trader_id());
+
+create policy "own_trades_update" on trades
+  for update to authenticated
+  using (
+    user_id = auth_trader_id()
+    and deleted_at is null
+  );
+
+-- Admins read all (including soft-deleted) trades in their orgs
+create policy "admin_org_trades_read" on trades
+  for select to authenticated
+  using (
+    user_id in (
+      select om.user_id
+      from   org_memberships om
+      where  om.org_id in (
+        select org_id from auth_org_roles
+        where org_role in ('owner', 'admin')
+      )
+    )
+  );
+
+create policy "admin_org_trades_update" on trades
+  for update to authenticated
+  using (
+    user_id in (
+      select om.user_id
+      from   org_memberships om
+      where  om.org_id in (
+        select org_id from auth_org_roles
+        where org_role in ('owner', 'admin')
+      )
+    )
+  );
+
+create policy "no_hard_delete_trades" on trades
+  for delete to authenticated
+  using (false);
+
+
+-- ============================================================
+-- 7. TRADE_AUDIT_LOG — rewrite using auth_org_roles view
+-- ============================================================
+alter table trade_audit_log enable row level security;
+
+drop policy if exists "own_trade_audit_read"   on trade_audit_log;
+drop policy if exists "admin_audit_read"        on trade_audit_log;
+drop policy if exists "no_direct_audit_write"   on trade_audit_log;
+
+create policy "own_trade_audit_read" on trade_audit_log
+  for select to authenticated
+  using (
+    trade_id in (
+      select id from trades where user_id = auth_trader_id()
+    )
+  );
+
+create policy "admin_audit_read" on trade_audit_log
+  for select to authenticated
+  using (
+    trade_id in (
+      select t.id
+      from   trades t
+      join   org_memberships om on om.user_id = t.user_id
+      where  om.org_id in (
+        select org_id from auth_org_roles
+        where org_role in ('owner', 'admin')
+      )
+    )
+  );
+
+create policy "no_direct_audit_write" on trade_audit_log
+  for all to authenticated
+  using (false) with check (false);
+
+
+-- ============================================================
+-- 8. Grant view access
+-- ============================================================
+grant select on auth_org_roles to authenticated;
+
+# 003
+
+# 004
+
+# 005
+
+# 006
+
+
+# 007
+-- ============================================================
+-- migrations/007_leaderboard_optin.sql
+--
+-- Adds opt-in leaderboard visibility per membership.
+-- Members are ON by default, admins/owners are OFF by default.
+-- Anyone can toggle their own visibility.
+-- ============================================================
+
+-- Add column
+alter table org_memberships
+  add column if not exists on_leaderboard boolean not null default true;
+
+-- Admins/owners default to hidden
+update org_memberships
+set on_leaderboard = false
+where org_role in ('owner', 'admin');
+
+-- RPC: toggle own leaderboard visibility
+create or replace function toggle_leaderboard_visibility(
+  p_org_id uuid,
+  p_show   boolean
+)
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+begin
+  select id into v_user_id from trader_users where auth_user_id = auth.uid();
+  if v_user_id is null then
+    return jsonb_build_object('ok', false, 'error', 'User not found');
+  end if;
+
+  update org_memberships
+  set on_leaderboard = p_show
+  where user_id = v_user_id and org_id = p_org_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+alter function toggle_leaderboard_visibility(uuid, boolean) owner to postgres;
+grant execute on function toggle_leaderboard_visibility(uuid, boolean) to authenticated;
+
+-- Update get_org_leaderboard to respect on_leaderboard flag
+create or replace function get_org_leaderboard(
+  p_org_id uuid,
+  p_sort   text default 'lifetime_pnl'
+)
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_caller_id   uuid;
+  v_caller_role text;
+  v_is_admin    bool;
+  v_month_start timestamptz;
+  v_on_lb       bool;
+  v_result      jsonb;
+begin
+  select id into v_caller_id from trader_users where auth_user_id = auth.uid();
+
+  select org_role, on_leaderboard
+  into v_caller_role, v_on_lb
+  from org_memberships
+  where user_id = v_caller_id and org_id = p_org_id;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'Not a member of this organisation');
+  end if;
+
+  v_is_admin    := v_caller_role in ('owner', 'admin');
+  v_month_start := date_trunc('month', now());
+
+  if p_sort not in ('lifetime_pnl','monthly_pnl','win_rate','avg_r') then
+    p_sort := 'lifetime_pnl';
+  end if;
+
+  with stats as (
+    select
+      tu.id                                                         as user_id,
+      tu.display_name,
+      tu.avatar_url,
+      (tu.id = v_caller_id)                                         as is_current_user,
+      om.org_role,
+      om.on_leaderboard,
+      count(*) filter (
+        where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+      )::int                                                        as total_closed,
+      count(*) filter (where t.status = 'OPEN')::int               as open_trades,
+      coalesce(sum(t.realised_pnl) filter (
+        where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+      ), 0)                                                         as lifetime_pnl,
+      coalesce(sum(t.realised_pnl) filter (
+        where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+          and t.created_at >= v_month_start
+      ), 0)                                                         as monthly_pnl,
+      case when count(*) filter (
+        where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+      ) = 0 then null
+      else round(
+        100.0 * count(*) filter (
+          where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+            and coalesce(t.realised_pnl,0) > 0
+        )::numeric /
+        count(*) filter (
+          where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+        ), 2)
+      end                                                           as win_rate,
+      case when count(*) filter (
+        where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+          and coalesce(t.risk_amount,0) > 0
+      ) = 0 then null
+      else round(
+        avg(t.realised_pnl / nullif(t.risk_amount,0)) filter (
+          where t.status in ('CLOSED','STOPPED','TARGET_HIT')
+            and coalesce(t.risk_amount,0) > 0
+        ), 3)
+      end                                                           as avg_r
+    from org_memberships om
+    join trader_users tu on tu.id = om.user_id
+    left join trades t on t.user_id = tu.id and t.deleted_at is null
+    where om.org_id = p_org_id
+      -- Only include members who opted in, OR the caller themselves
+      and (om.on_leaderboard = true or tu.id = v_caller_id)
+    group by tu.id, tu.display_name, tu.avatar_url, om.org_role, om.on_leaderboard
+  ),
+  ranked as (
+    select *,
+      row_number() over (
+        order by case p_sort
+          when 'lifetime_pnl' then lifetime_pnl
+          when 'monthly_pnl'  then monthly_pnl
+          when 'win_rate'     then coalesce(win_rate, -1)
+          when 'avg_r'        then coalesce(avg_r, -999)
+        end desc
+      ) as rank
+    from stats
+  )
+  select jsonb_build_object(
+    'ok',            true,
+    'is_admin',      v_is_admin,
+    'i_am_on_lb',    v_on_lb,
+    'rows',          jsonb_agg(
+      case when v_is_admin then
+        jsonb_build_object(
+          'rank',            rank,
+          'user_id',         user_id,
+          'display_name',    display_name,
+          'avatar_url',      avatar_url,
+          'is_current_user', is_current_user,
+          'on_leaderboard',  on_leaderboard,
+          'total_closed',    total_closed,
+          'open_trades',     open_trades,
+          'lifetime_pnl',    lifetime_pnl,
+          'monthly_pnl',     monthly_pnl,
+          'win_rate',        win_rate,
+          'avg_r',           avg_r
+        )
+      else
+        jsonb_build_object(
+          'rank',            rank,
+          'user_id',         user_id,
+          'display_name',    display_name,
+          'avatar_url',      avatar_url,
+          'is_current_user', is_current_user,
+          'on_leaderboard',  on_leaderboard,
+          'total_closed',    total_closed,
+          'open_trades',     open_trades
+        )
+      end
+      order by rank
+    )
+  )
+  into v_result
+  from ranked;
+
+  return v_result;
+end;
+$$;
+
+alter function get_org_leaderboard(uuid, text) owner to postgres;
+
+# 008
+-- ============================================================
+-- migrations/008_groups.sql
+-- Adds groups within organisations.
+-- One member can only belong to one group per org.
+-- ============================================================
+
+create table if not exists org_groups (
+  id         uuid primary key default gen_random_uuid(),
+  org_id     uuid not null references organisations(id) on delete cascade,
+  name       text not null,
+  created_by uuid references trader_users(id),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists org_groups_org_idx on org_groups(org_id);
+
+create table if not exists org_group_members (
+  id        uuid primary key default gen_random_uuid(),
+  group_id  uuid not null references org_groups(id) on delete cascade,
+  user_id   uuid not null references trader_users(id) on delete cascade,
+  org_id    uuid not null references organisations(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  unique (user_id, org_id)
+);
+
+create index if not exists group_members_group_idx on org_group_members(group_id);
+create index if not exists group_members_user_idx  on org_group_members(user_id);
+
+-- create_group
+create or replace function create_group(p_org_id uuid, p_name text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_caller_id uuid; v_caller_role text; v_group_id uuid;
+begin
+  if p_name is null or trim(p_name) = '' then
+    return jsonb_build_object('ok',false,'error','Group name cannot be empty');
+  end if;
+  select id into v_caller_id from trader_users where auth_user_id = auth.uid();
+  select org_role into v_caller_role from org_memberships where user_id=v_caller_id and org_id=p_org_id;
+  if v_caller_role not in ('owner','admin') then
+    return jsonb_build_object('ok',false,'error','Insufficient permissions');
+  end if;
+  insert into org_groups (org_id,name,created_by) values (p_org_id,trim(p_name),v_caller_id) returning id into v_group_id;
+  return jsonb_build_object('ok',true,'group_id',v_group_id);
+end;$$;
+
+-- rename_group
+create or replace function rename_group(p_group_id uuid, p_new_name text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_caller_id uuid; v_caller_role text; v_org_id uuid;
+begin
+  if p_new_name is null or trim(p_new_name)='' then return jsonb_build_object('ok',false,'error','Name cannot be empty'); end if;
+  select id into v_caller_id from trader_users where auth_user_id=auth.uid();
+  select org_id into v_org_id from org_groups where id=p_group_id;
+  select org_role into v_caller_role from org_memberships where user_id=v_caller_id and org_id=v_org_id;
+  if v_caller_role not in ('owner','admin') then return jsonb_build_object('ok',false,'error','Insufficient permissions'); end if;
+  update org_groups set name=trim(p_new_name) where id=p_group_id;
+  return jsonb_build_object('ok',true);
+end;$$;
+
+-- delete_group
+create or replace function delete_group(p_group_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_caller_id uuid; v_caller_role text; v_org_id uuid;
+begin
+  select id into v_caller_id from trader_users where auth_user_id=auth.uid();
+  select org_id into v_org_id from org_groups where id=p_group_id;
+  select org_role into v_caller_role from org_memberships where user_id=v_caller_id and org_id=v_org_id;
+  if v_caller_role not in ('owner','admin') then return jsonb_build_object('ok',false,'error','Insufficient permissions'); end if;
+  delete from org_groups where id=p_group_id;
+  return jsonb_build_object('ok',true);
+end;$$;
+
+-- set_group_member (adds or moves member to a group)
+create or replace function set_group_member(p_group_id uuid, p_member_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_caller_id uuid; v_caller_role text; v_org_id uuid;
+begin
+  select id into v_caller_id from trader_users where auth_user_id=auth.uid();
+  select org_id into v_org_id from org_groups where id=p_group_id;
+  select org_role into v_caller_role from org_memberships where user_id=v_caller_id and org_id=v_org_id;
+  if v_caller_role not in ('owner','admin') then return jsonb_build_object('ok',false,'error','Insufficient permissions'); end if;
+  if not exists (select 1 from org_memberships where user_id=p_member_id and org_id=v_org_id) then
+    return jsonb_build_object('ok',false,'error','User is not a member of this organisation');
+  end if;
+  insert into org_group_members (group_id,user_id,org_id) values (p_group_id,p_member_id,v_org_id)
+  on conflict (user_id,org_id) do update set group_id=p_group_id, joined_at=now();
+  return jsonb_build_object('ok',true);
+end;$$;
+
+-- remove_group_member
+create or replace function remove_group_member(p_group_id uuid, p_member_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_caller_id uuid; v_caller_role text; v_org_id uuid;
+begin
+  select id into v_caller_id from trader_users where auth_user_id=auth.uid();
+  select org_id into v_org_id from org_groups where id=p_group_id;
+  select org_role into v_caller_role from org_memberships where user_id=v_caller_id and org_id=v_org_id;
+  if v_caller_role not in ('owner','admin') then return jsonb_build_object('ok',false,'error','Insufficient permissions'); end if;
+  delete from org_group_members where group_id=p_group_id and user_id=p_member_id;
+  return jsonb_build_object('ok',true);
+end;$$;
+
+-- get_org_groups
+create or replace function get_org_groups(p_org_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_caller_id uuid; v_caller_role text; v_is_admin bool;
+begin
+  select id into v_caller_id from trader_users where auth_user_id=auth.uid();
+  select org_role into v_caller_role from org_memberships where user_id=v_caller_id and org_id=p_org_id;
+  if not found then return jsonb_build_object('ok',false,'error','Not a member of this organisation'); end if;
+  v_is_admin := v_caller_role in ('owner','admin');
+  return (
+    select jsonb_build_object('ok',true,'is_admin',v_is_admin,'groups',jsonb_agg(
+      jsonb_build_object(
+        'id',g.id,'name',g.name,
+        'member_count',coalesce(mc.cnt,0),
+        'is_my_group',exists(select 1 from org_group_members where group_id=g.id and user_id=v_caller_id)
+      ) order by g.created_at
+    ))
+    from org_groups g
+    left join (select group_id, count(*)::int as cnt from org_group_members group by group_id) mc on mc.group_id=g.id
+    where g.org_id=p_org_id
+      and (v_is_admin or exists(select 1 from org_group_members where group_id=g.id and user_id=v_caller_id))
+  );
+end;$$;
+
+-- get_group_leaderboard
+create or replace function get_group_leaderboard(p_group_id uuid, p_sort text default 'lifetime_pnl')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_caller_id uuid; v_caller_role text; v_is_admin bool;
+  v_on_lb bool; v_org_id uuid; v_month_start timestamptz; v_result jsonb;
+begin
+  select id into v_caller_id from trader_users where auth_user_id=auth.uid();
+  select org_id into v_org_id from org_groups where id=p_group_id;
+  select org_role, on_leaderboard into v_caller_role, v_on_lb
+  from org_memberships where user_id=v_caller_id and org_id=v_org_id;
+  if not found then return jsonb_build_object('ok',false,'error','Not a member of this organisation'); end if;
+  v_is_admin := v_caller_role in ('owner','admin');
+  v_month_start := date_trunc('month',now());
+  if p_sort not in ('lifetime_pnl','monthly_pnl','win_rate','avg_r') then p_sort := 'lifetime_pnl'; end if;
+
+  with stats as (
+    select
+      tu.id as user_id, tu.display_name, tu.avatar_url,
+      (tu.id=v_caller_id) as is_current_user,
+      om.org_role, om.on_leaderboard,
+      count(*) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT'))::int as total_closed,
+      count(*) filter (where t.status='OPEN')::int as open_trades,
+      coalesce(sum(t.realised_pnl) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT')),0) as lifetime_pnl,
+      coalesce(sum(t.realised_pnl) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT') and t.created_at>=v_month_start),0) as monthly_pnl,
+      case when count(*) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT'))=0 then null
+        else round(100.0*count(*) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT') and coalesce(t.realised_pnl,0)>0)::numeric
+          /count(*) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT')),2) end as win_rate,
+      case when count(*) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT') and coalesce(t.risk_amount,0)>0)=0 then null
+        else round(avg(t.realised_pnl/nullif(t.risk_amount,0)) filter (where t.status in ('CLOSED','STOPPED','TARGET_HIT') and coalesce(t.risk_amount,0)>0),3) end as avg_r
+    from org_group_members ogm
+    join trader_users tu on tu.id=ogm.user_id
+    join org_memberships om on om.user_id=ogm.user_id and om.org_id=v_org_id
+    left join trades t on t.user_id=tu.id and t.deleted_at is null
+    where ogm.group_id=p_group_id and (om.on_leaderboard=true or tu.id=v_caller_id)
+    group by tu.id,tu.display_name,tu.avatar_url,om.org_role,om.on_leaderboard
+  ),
+  ranked as (
+    select *, row_number() over (order by case p_sort
+      when 'lifetime_pnl' then lifetime_pnl when 'monthly_pnl' then monthly_pnl
+      when 'win_rate' then coalesce(win_rate,-1) when 'avg_r' then coalesce(avg_r,-999)
+    end desc) as rank from stats
+  )
+  select jsonb_build_object('ok',true,'is_admin',v_is_admin,'i_am_on_lb',v_on_lb,'group_id',p_group_id,
+    'rows',jsonb_agg(
+      case when v_is_admin then jsonb_build_object('rank',rank,'user_id',user_id,'display_name',display_name,
+        'avatar_url',avatar_url,'is_current_user',is_current_user,'on_leaderboard',on_leaderboard,
+        'total_closed',total_closed,'open_trades',open_trades,'lifetime_pnl',lifetime_pnl,
+        'monthly_pnl',monthly_pnl,'win_rate',win_rate,'avg_r',avg_r)
+      else jsonb_build_object('rank',rank,'user_id',user_id,'display_name',display_name,
+        'avatar_url',avatar_url,'is_current_user',is_current_user,'on_leaderboard',on_leaderboard,
+        'total_closed',total_closed,'open_trades',open_trades)
+      end order by rank
+    )
+  ) into v_result from ranked;
+
+  return coalesce(v_result, jsonb_build_object('ok',true,'is_admin',v_is_admin,'i_am_on_lb',v_on_lb,'group_id',p_group_id,'rows','[]'::jsonb));
+end;$$;
+
+alter function create_group(uuid,text)          owner to postgres;
+alter function rename_group(uuid,text)          owner to postgres;
+alter function delete_group(uuid)               owner to postgres;
+alter function set_group_member(uuid,uuid)      owner to postgres;
+alter function remove_group_member(uuid,uuid)   owner to postgres;
+alter function get_org_groups(uuid)             owner to postgres;
+alter function get_group_leaderboard(uuid,text) owner to postgres;
+
+grant execute on function create_group(uuid,text)          to authenticated;
+grant execute on function rename_group(uuid,text)          to authenticated;
+grant execute on function delete_group(uuid)               to authenticated;
+grant execute on function set_group_member(uuid,uuid)      to authenticated;
+grant execute on function remove_group_member(uuid,uuid)   to authenticated;
+grant execute on function get_org_groups(uuid)             to authenticated;
+grant execute on function get_group_leaderboard(uuid,text) to authenticated;
+
+grant select,insert,update,delete on public.org_groups        to authenticated;
+grant select,insert,update,delete on public.org_group_members to authenticated;
+
 
 # 009
 
@@ -328,6 +1008,130 @@ GRANT EXECUTE ON FUNCTION super_admin_get_org_detail(uuid) TO authenticated;
 
 
 # 010
+
+-- ============================================================
+-- migrations/010_currency.sql
+-- Adds currency selection to organisations and indie users.
+-- "INR" = Indian markets (NSE/BSE)
+-- "USD" = US markets (NYSE/NASDAQ)
+-- ============================================================
+
+-- Add currency to organisations
+alter table organisations
+  add column if not exists currency text not null default 'INR'
+    check (currency in ('INR', 'USD'));
+
+-- Add currency to trader_users (for indie users)
+alter table trader_users
+  add column if not exists currency text not null default 'INR'
+    check (currency in ('INR', 'USD'));
+
+-- Update create_org_with_owner to accept currency
+create or replace function create_org_with_owner(
+  p_name     text,
+  p_domain   text    default null,
+  p_currency text    default 'INR'
+)
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_org_id  uuid;
+  v_slug    text;
+  v_cur     text;
+begin
+  select id into v_user_id from trader_users where auth_user_id = auth.uid();
+  if v_user_id is null then
+    return jsonb_build_object('ok', false, 'error', 'User not found');
+  end if;
+
+  v_cur  := case when p_currency = 'USD' then 'USD' else 'INR' end;
+  v_slug := lower(regexp_replace(trim(p_name), '[^a-zA-Z0-9]+', '-', 'g'));
+  v_slug := trim(both '-' from v_slug) || '-' || floor(extract(epoch from now()))::text;
+
+  insert into organisations (name, slug, domain, currency)
+  values (p_name, v_slug, nullif(trim(coalesce(p_domain,'')), ''), v_cur)
+  returning id into v_org_id;
+
+  insert into org_memberships (user_id, org_id, org_role)
+  values (v_user_id, v_org_id, 'owner');
+
+  -- Sync user currency to match org
+  update trader_users
+  set user_type = 'org_admin', org_id = v_org_id, org_role = 'admin', currency = v_cur
+  where id = v_user_id;
+
+  return jsonb_build_object('ok', true, 'org_id', v_org_id, 'currency', v_cur);
+end;
+$$;
+
+alter function create_org_with_owner(text, text, text) owner to postgres;
+grant execute on function create_org_with_owner(text, text, text) to authenticated;
+
+-- Update validate_and_accept_invite to sync currency from org to user
+create or replace function validate_and_accept_invite(p_code text)
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_invite  org_invites%rowtype;
+  v_org     organisations%rowtype;
+  v_user_id uuid;
+  v_email   text;
+  v_role    text;
+begin
+  select id into v_user_id from trader_users where auth_user_id = auth.uid();
+  if v_user_id is null then
+    return jsonb_build_object('ok', false, 'error', 'User not found');
+  end if;
+
+  select email into v_email from auth.users where id = auth.uid();
+
+  select * into v_invite from org_invites where code = p_code;
+  if not found then return jsonb_build_object('ok', false, 'error', 'Invite not found'); end if;
+  if v_invite.expires_at < now() then return jsonb_build_object('ok', false, 'error', 'Invite has expired'); end if;
+  if v_invite.max_uses is not null and v_invite.use_count >= v_invite.max_uses then
+    return jsonb_build_object('ok', false, 'error', 'Invite has reached its usage limit');
+  end if;
+  if exists (select 1 from org_memberships where user_id = v_user_id and org_id = v_invite.org_id) then
+    return jsonb_build_object('ok', false, 'error', 'You are already a member of this organisation');
+  end if;
+
+  select * into v_org from organisations where id = v_invite.org_id;
+  if v_org.domain is not null then
+    if v_email not ilike '%@' || v_org.domain then
+      return jsonb_build_object('ok', false, 'error', 'Your email domain is not allowed for this organisation');
+    end if;
+  end if;
+
+  v_role := coalesce(v_invite.role, 'member');
+
+  insert into org_memberships (user_id, org_id, org_role)
+  values (v_user_id, v_invite.org_id, v_role);
+
+  -- Sync currency from org to user
+  update trader_users
+  set
+    user_type = case when v_role = 'admin' then 'org_admin' else 'org_member' end,
+    org_id    = v_invite.org_id,
+    org_role  = v_role,
+    currency  = v_org.currency
+  where id = v_user_id;
+
+  update org_invites set use_count = use_count + 1 where id = v_invite.id;
+
+  return jsonb_build_object('ok', true, 'org_id', v_invite.org_id, 'role', v_role, 'currency', v_org.currency);
+end;
+$$;
+
+alter function validate_and_accept_invite(text) owner to postgres;
+grant execute on function validate_and_accept_invite(text) to authenticated;
+
+
+
 -- Backfill role = 'admin' for all current org owners
 UPDATE trader_users tu
 SET role = 'admin'
@@ -1219,3 +2023,94 @@ $$;
 GRANT EXECUTE ON FUNCTION super_admin_delete_org(uuid) TO authenticated;
 
 # 015
+-- ================================================================
+-- 015_fix_delete_org_fk.sql
+--
+-- Fixes: "update or delete on table organisations violates
+-- foreign key constraint trader_users_org_id_fkey"
+--
+-- Root cause: trader_users.org_id has a FK → organisations.id.
+-- The previous fix excluded super admins from the member reset,
+-- so the super admin's org_id still pointed at the org being
+-- deleted when DELETE FROM organisations ran.
+--
+-- Fix: null out org_id on ALL members (including super admin)
+-- before deleting the org row. Super admin's user_type and
+-- active_org_id are then corrected in the restore step below.
+-- ================================================================
+
+CREATE OR REPLACE FUNCTION super_admin_delete_org(p_org_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id    uuid;
+  v_caller_role  text;
+  v_my_org_role  text;
+  v_next_org_id  uuid;
+BEGIN
+  SELECT tu.id, tu.role
+    INTO v_caller_id, v_caller_role
+    FROM trader_users tu
+   WHERE tu.auth_user_id = auth.uid()
+   LIMIT 1;
+
+  IF v_caller_role IS DISTINCT FROM 'admin' THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Not authorised');
+  END IF;
+
+  SELECT org_role INTO v_my_org_role
+    FROM org_memberships
+   WHERE user_id = v_caller_id AND org_id = p_org_id;
+
+  IF v_my_org_role IS DISTINCT FROM 'owner' THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'You are not the owner of this organisation');
+  END IF;
+
+  -- Step 1: null out org_id on ALL members (satisfies the FK)
+  -- and reset non-super-admins to indie at the same time.
+  -- Super admin is included here just to clear the FK reference —
+  -- their user_type is corrected in the restore step below.
+  UPDATE trader_users
+     SET org_id    = NULL,
+         user_type = CASE WHEN role = 'admin' THEN user_type ELSE 'indie' END
+   WHERE id IN (
+     SELECT user_id FROM org_memberships WHERE org_id = p_org_id
+   );
+
+  -- Step 2: cascade deletes — org_id FK is now clear
+  DELETE FROM org_group_members
+   WHERE group_id IN (SELECT id FROM org_groups WHERE org_id = p_org_id);
+  DELETE FROM org_groups      WHERE org_id = p_org_id;
+  DELETE FROM org_memberships WHERE org_id = p_org_id;
+  DELETE FROM org_invites     WHERE org_id = p_org_id;
+  DELETE FROM organisations   WHERE id     = p_org_id;
+
+  -- Step 3: restore caller to their next org, or indie
+  SELECT org_id INTO v_next_org_id
+    FROM org_memberships
+   WHERE user_id = v_caller_id
+   ORDER BY joined_at ASC
+   LIMIT 1;
+
+  IF v_next_org_id IS NOT NULL THEN
+    UPDATE trader_users
+       SET user_type     = 'org_admin',
+           org_id        = v_next_org_id,
+           active_org_id = v_next_org_id
+     WHERE id = v_caller_id;
+  ELSE
+    UPDATE trader_users
+       SET user_type     = 'indie',
+           org_id        = NULL,
+           active_org_id = NULL
+     WHERE id = v_caller_id;
+  END IF;
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION super_admin_delete_org(uuid) TO authenticated;

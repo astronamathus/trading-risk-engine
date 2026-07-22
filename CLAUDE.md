@@ -111,6 +111,7 @@ await supabase.from("org_group_members").select("user_id, group_id").eq("org_id"
 8. `008_groups.sql` — `org_groups`, `org_group_members` tables + all group RPCs
 9. `009_super_admin.sql` — `org_groups`, `org_group_members` Adds three SECURITY DEFINER RPCs for platform-level super admin.
 10. `010_super_admin.sql` — `org_groups`, `org_group_members` Backfill role = 'admin' for all existing org owners
+      `migrations/010_currency.sql`  — `org_groups`, `org_group_members` Added US Currency and Stocks
 11. `011_scope_super_admin_to_own_orgs.sql` — `org_groups`, `org_group_members` Replaces the four super_admin_* RPCs so they only operate on orgs the caller is a member of. Super admins are multi-org owners — not platform gods with access to everyone's data.
 12. `012_co_owner_and_invisibility.sql` — `org_groups`, `org_group_members` exclude super admins (role = 'admin') so they're invisible to regular members, org owners, and the leaderboard.
 13. `013_fix_set_active_org.sql` — `org_groups`, `org_group_members` Fixes: "new row for relation trader_users violates check constraint trader_users_org_role_check"
