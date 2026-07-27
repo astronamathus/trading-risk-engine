@@ -1,130 +1,238 @@
 # 001
 -- ============================================================
--- 001_base_schema.sql
--- Core tables, constraints, and initial helper function.
+-- TABLES
 -- ============================================================
 
--- Users table (one row per user, linked to auth.users)
+-- Anonymous + authenticated users
 create table if not exists trader_users (
   id            uuid primary key default gen_random_uuid(),
+  anonymous_id  text unique not null,
   auth_user_id  uuid references auth.users(id),
-  anonymous_id  text,
-  display_name  text,
-  avatar_url    text,
-  user_type     text,          -- 'indie' | 'org_admin' | 'org_member' | null (onboarding)
-  org_id        uuid,          -- legacy single-org pointer (source of truth: org_memberships)
-  org_role      text,          -- legacy role copy (source of truth: org_memberships)
-  role          text default 'user',  -- platform role: 'user' | 'admin' (super admin)
-  capital_limit numeric default 100000,
-  currency      text not null default 'INR' check (currency in ('INR','USD')),
-  active_org_id uuid,          -- super admin: which org they're currently managing
-  created_at    timestamptz not null default now()
+  org_id        uuid,                          -- filled after joining an org
+  org_role      text check (org_role in ('admin', 'member')),
+  user_type     text check (user_type in ('indie', 'org_member', 'org_admin')),
+  role          text default 'user',           -- legacy field, keep for compat
+  created_at    timestamptz default now()
 );
+
+create index if not exists idx_trader_users_auth_user_id on trader_users(auth_user_id);
 
 -- Organisations
 create table if not exists organisations (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
-  slug       text not null unique,
+  slug       text unique not null,
   domain     text,
-  currency   text not null default 'INR' check (currency in ('INR','USD')),
-  created_at timestamptz not null default now()
+  created_at timestamptz default now()
 );
 
--- Add FK now that both tables exist
+-- Add FK after both tables exist
 alter table trader_users
-  add column if not exists active_org_id uuid references organisations(id) on delete set null;
-alter table trader_users
-  add column if not exists org_id uuid references organisations(id) on delete set null;
-
--- Multi-org membership junction
-create table if not exists org_memberships (
-  org_id         uuid not null references organisations(id) on delete cascade,
-  user_id        uuid not null references trader_users(id),
-  org_role       text not null default 'member',  -- 'owner' | 'admin' | 'member'
-  on_leaderboard boolean not null default true,
-  joined_at      timestamptz not null default now(),
-  primary key (org_id, user_id)
-);
+  add constraint trader_users_org_id_fkey
+  foreign key (org_id) references organisations(id);
 
 -- Invite codes
 create table if not exists org_invites (
   id         uuid primary key default gen_random_uuid(),
-  org_id     uuid not null references organisations(id) on delete cascade,
-  code       text not null unique,
-  role       text default 'member',
+  org_id     uuid references organisations(id) on delete cascade,
+  code       text unique not null,
+  role       text default 'member' check (role in ('member', 'admin')),
+  created_by uuid references trader_users(id),
   expires_at timestamptz not null,
-  max_uses   int,
-  use_count  int not null default 0,
-  created_at timestamptz not null default now()
+  max_uses   int default null,
+  use_count  int default 0,
+  created_at timestamptz default now()
 );
 
 -- Trades
 create table if not exists trades (
   id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null references trader_users(id),
+  user_id       uuid references trader_users(id) on delete cascade,
   ticker        text not null,
-  quantity      numeric not null,
   entry_price   numeric not null,
+  entry_target  numeric,
   stop_loss     numeric not null,
   target        numeric,
-  entry_target  numeric,
-  exit_price    numeric,
+  quantity      integer not null,
   risk_amount   numeric,
+  capital       numeric default 100000,
+  exit_price    numeric,
   realised_pnl  numeric,
-  capital       numeric,
-  status        text not null default 'QUEUED',  -- 'QUEUED'|'OPEN'|'CLOSED'|'STOPPED'|'TARGET_HIT'
   notes         text,
-  -- Soft delete fields
-  deleted_at    timestamptz,
-  deleted_by    uuid references trader_users(id),
-  delete_reason text,
-  created_at    timestamptz not null default now()
+  status        text default 'OPEN'
+    check (status in ('QUEUED','OPEN','CLOSED','STOPPED','TARGET_HIT')),
+  created_at    timestamptz default now()
 );
 
--- Trade audit log (append-only)
-create table if not exists trade_audit_log (
-  id          uuid primary key default gen_random_uuid(),
-  trade_id    uuid not null references trades(id),
-  acted_by    uuid references trader_users(id),
-  action      text not null check (action = any (array[
-    'edit_quantity','edit_stop_loss','edit_target','edit_notes',
-    'edit_status','edit_exit_price','soft_delete','restore',
-    'admin_edit','admin_close'
-  ])),
-  field_name  text,
-  old_value   text,
-  new_value   text,
-  reason      text,
-  created_at  timestamptz not null default now()
-);
+-- ============================================================
+-- GRANTS (table-level permissions for anon + authenticated)
+-- ============================================================
 
--- Groups (added in 008, listed here for schema completeness)
-create table if not exists org_groups (
-  id         uuid primary key default gen_random_uuid(),
-  org_id     uuid not null references organisations(id) on delete cascade,
-  name       text not null,
-  created_by uuid references trader_users(id),
-  created_at timestamptz not null default now()
-);
+grant select, insert, update, delete on public.trader_users   to anon, authenticated;
+grant select, insert, update, delete on public.organisations  to authenticated;
+grant select, insert, update, delete on public.org_invites    to authenticated;
+grant select, insert, update, delete on public.trades         to anon, authenticated;
 
-create table if not exists org_group_members (
-  id        uuid primary key default gen_random_uuid(),
-  group_id  uuid not null references org_groups(id) on delete cascade,
-  user_id   uuid not null references trader_users(id) on delete cascade,
-  org_id    uuid not null references organisations(id) on delete cascade,
-  joined_at timestamptz not null default now(),
-  unique (user_id, org_id)   -- one group per member per org
-);
+-- ============================================================
+-- ROW LEVEL SECURITY — trader_users
+-- ============================================================
 
--- Indexes
-create index if not exists idx_trades_user_id       on trades(user_id);
-create index if not exists idx_trades_user_active   on trades(user_id, deleted_at) where deleted_at is null;
-create index if not exists idx_trades_user_status   on trades(user_id, status);
-create index if not exists org_groups_org_idx       on org_groups(org_id);
-create index if not exists group_members_group_idx  on org_group_members(group_id);
-create index if not exists group_members_user_idx   on org_group_members(user_id);
+alter table trader_users enable row level security;
 
+-- Anon: full access (for anonymous trade saving + migration)
+create policy "trader_users_anon"
+  on trader_users for all to anon
+  using (true) with check (true);
+
+-- Authenticated: select/update/delete own row
+create policy "trader_users_select"
+  on trader_users for select to authenticated
+  using (auth_user_id = auth.uid());
+
+create policy "trader_users_update"
+  on trader_users for update to authenticated
+  using (auth_user_id = auth.uid())
+  with check (auth_user_id = auth.uid());
+
+create policy "trader_users_delete"
+  on trader_users for delete to authenticated
+  using (auth_user_id = auth.uid());
+
+-- Authenticated: insert own row
+create policy "trader_users_insert"
+  on trader_users for insert to authenticated
+  with check (true);
+
+-- ============================================================
+-- ROW LEVEL SECURITY — trades
+-- ============================================================
+
+alter table trades enable row level security;
+
+-- Anon: full access (for anonymous trade saving)
+create policy "anon_all_trades"
+  on trades for all to anon
+  using (true) with check (true);
+
+-- Authenticated: own trades always visible
+-- Org admins can also see all trades in their org
+create policy "authenticated_own_trades"
+  on trades for select to authenticated
+  using (
+    -- own trades
+    user_id in (
+      select id from trader_users where auth_user_id = auth.uid()
+    )
+    or
+    -- org admin sees all member trades
+    user_id in (
+      select tu.id from trader_users tu
+      where tu.org_id = (
+        select org_id from trader_users
+        where auth_user_id = auth.uid() and org_role = 'admin'
+      )
+      and tu.org_id is not null
+    )
+  );
+
+create policy "authenticated_insert_trades"
+  on trades for insert to authenticated
+  with check (
+    user_id in (
+      select id from trader_users where auth_user_id = auth.uid()
+    )
+  );
+
+create policy "authenticated_update_trades"
+  on trades for update to authenticated
+  using (
+    user_id in (
+      select id from trader_users where auth_user_id = auth.uid()
+    )
+    or
+    user_id in (
+      select tu.id from trader_users tu
+      where tu.org_id = (
+        select org_id from trader_users
+        where auth_user_id = auth.uid() and org_role = 'admin'
+      )
+      and tu.org_id is not null
+    )
+  );
+
+create policy "authenticated_delete_trades"
+  on trades for delete to authenticated
+  using (
+    -- only admins can delete (members cannot delete their own)
+    user_id in (
+      select tu.id from trader_users tu
+      where tu.org_id = (
+        select org_id from trader_users
+        where auth_user_id = auth.uid() and org_role = 'admin'
+      )
+      and tu.org_id is not null
+    )
+    or
+    -- indie users can delete their own
+    (
+      user_id in (
+        select id from trader_users
+        where auth_user_id = auth.uid() and user_type = 'indie'
+      )
+    )
+  );
+
+-- ============================================================
+-- ROW LEVEL SECURITY — organisations
+-- ============================================================
+
+alter table organisations enable row level security;
+
+create policy "org_members_read"
+  on organisations for select to authenticated
+  using (
+    id in (select org_id from trader_users where auth_user_id = auth.uid())
+  );
+
+create policy "org_insert"
+  on organisations for insert to authenticated
+  with check (true);
+
+create policy "org_admin_update"
+  on organisations for update to authenticated
+  using (
+    id in (
+      select org_id from trader_users
+      where auth_user_id = auth.uid() and org_role = 'admin'
+    )
+  );
+
+-- ============================================================
+-- ROW LEVEL SECURITY — org_invites
+-- ============================================================
+
+alter table org_invites enable row level security;
+
+-- Admins manage invites for their own org
+create policy "admin_manage_invites"
+  on org_invites for all to authenticated
+  using (
+    org_id in (
+      select org_id from trader_users
+      where auth_user_id = auth.uid() and org_role = 'admin'
+    )
+  )
+  with check (
+    org_id in (
+      select org_id from trader_users
+      where auth_user_id = auth.uid() and org_role = 'admin'
+    )
+  );
+
+-- Anyone authenticated can read an invite by code (for join flow)
+create policy "read_invite_by_code"
+  on org_invites for select to authenticated
+  using (true);
 
 # 002
 -- ============================================================
