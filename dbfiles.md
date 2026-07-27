@@ -1,3 +1,131 @@
+# 001
+-- ============================================================
+-- 001_base_schema.sql
+-- Core tables, constraints, and initial helper function.
+-- ============================================================
+
+-- Users table (one row per user, linked to auth.users)
+create table if not exists trader_users (
+  id            uuid primary key default gen_random_uuid(),
+  auth_user_id  uuid references auth.users(id),
+  anonymous_id  text,
+  display_name  text,
+  avatar_url    text,
+  user_type     text,          -- 'indie' | 'org_admin' | 'org_member' | null (onboarding)
+  org_id        uuid,          -- legacy single-org pointer (source of truth: org_memberships)
+  org_role      text,          -- legacy role copy (source of truth: org_memberships)
+  role          text default 'user',  -- platform role: 'user' | 'admin' (super admin)
+  capital_limit numeric default 100000,
+  currency      text not null default 'INR' check (currency in ('INR','USD')),
+  active_org_id uuid,          -- super admin: which org they're currently managing
+  created_at    timestamptz not null default now()
+);
+
+-- Organisations
+create table if not exists organisations (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  slug       text not null unique,
+  domain     text,
+  currency   text not null default 'INR' check (currency in ('INR','USD')),
+  created_at timestamptz not null default now()
+);
+
+-- Add FK now that both tables exist
+alter table trader_users
+  add column if not exists active_org_id uuid references organisations(id) on delete set null;
+alter table trader_users
+  add column if not exists org_id uuid references organisations(id) on delete set null;
+
+-- Multi-org membership junction
+create table if not exists org_memberships (
+  org_id         uuid not null references organisations(id) on delete cascade,
+  user_id        uuid not null references trader_users(id),
+  org_role       text not null default 'member',  -- 'owner' | 'admin' | 'member'
+  on_leaderboard boolean not null default true,
+  joined_at      timestamptz not null default now(),
+  primary key (org_id, user_id)
+);
+
+-- Invite codes
+create table if not exists org_invites (
+  id         uuid primary key default gen_random_uuid(),
+  org_id     uuid not null references organisations(id) on delete cascade,
+  code       text not null unique,
+  role       text default 'member',
+  expires_at timestamptz not null,
+  max_uses   int,
+  use_count  int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Trades
+create table if not exists trades (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references trader_users(id),
+  ticker        text not null,
+  quantity      numeric not null,
+  entry_price   numeric not null,
+  stop_loss     numeric not null,
+  target        numeric,
+  entry_target  numeric,
+  exit_price    numeric,
+  risk_amount   numeric,
+  realised_pnl  numeric,
+  capital       numeric,
+  status        text not null default 'QUEUED',  -- 'QUEUED'|'OPEN'|'CLOSED'|'STOPPED'|'TARGET_HIT'
+  notes         text,
+  -- Soft delete fields
+  deleted_at    timestamptz,
+  deleted_by    uuid references trader_users(id),
+  delete_reason text,
+  created_at    timestamptz not null default now()
+);
+
+-- Trade audit log (append-only)
+create table if not exists trade_audit_log (
+  id          uuid primary key default gen_random_uuid(),
+  trade_id    uuid not null references trades(id),
+  acted_by    uuid references trader_users(id),
+  action      text not null check (action = any (array[
+    'edit_quantity','edit_stop_loss','edit_target','edit_notes',
+    'edit_status','edit_exit_price','soft_delete','restore',
+    'admin_edit','admin_close'
+  ])),
+  field_name  text,
+  old_value   text,
+  new_value   text,
+  reason      text,
+  created_at  timestamptz not null default now()
+);
+
+-- Groups (added in 008, listed here for schema completeness)
+create table if not exists org_groups (
+  id         uuid primary key default gen_random_uuid(),
+  org_id     uuid not null references organisations(id) on delete cascade,
+  name       text not null,
+  created_by uuid references trader_users(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists org_group_members (
+  id        uuid primary key default gen_random_uuid(),
+  group_id  uuid not null references org_groups(id) on delete cascade,
+  user_id   uuid not null references trader_users(id) on delete cascade,
+  org_id    uuid not null references organisations(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  unique (user_id, org_id)   -- one group per member per org
+);
+
+-- Indexes
+create index if not exists idx_trades_user_id       on trades(user_id);
+create index if not exists idx_trades_user_active   on trades(user_id, deleted_at) where deleted_at is null;
+create index if not exists idx_trades_user_status   on trades(user_id, status);
+create index if not exists org_groups_org_idx       on org_groups(org_id);
+create index if not exists group_members_group_idx  on org_group_members(group_id);
+create index if not exists group_members_user_idx   on org_group_members(user_id);
+
+
 # 002
 -- ============================================================
 -- migrations/002_fix_rls_recursion.sql
@@ -2114,3 +2242,390 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION super_admin_delete_org(uuid) TO authenticated;
+
+# 016
+-- ================================================================
+-- 016_missing_rpcs_snapshot.sql
+--
+-- Captures RPCs that exist in production but were created before
+-- migration tracking began (migrations 001–006) and were never
+-- recorded in dbfiles.md.
+--
+-- Safe to re-run: all statements use CREATE OR REPLACE.
+-- Does NOT change any schema or data.
+-- ================================================================
+
+
+-- ── Helper: resolve auth.uid() → trader_users.id ─────────────
+CREATE OR REPLACE FUNCTION auth_trader_id()
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT id FROM trader_users WHERE auth_user_id = auth.uid() LIMIT 1;
+$$;
+
+ALTER FUNCTION auth_trader_id() OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION auth_trader_id() TO authenticated;
+
+
+-- ── promote_member ────────────────────────────────────────────
+-- Promotes or demotes a member within an org.
+-- Blocks self-promotion and non-owner ownership transfers.
+CREATE OR REPLACE FUNCTION promote_member(
+  p_member_id uuid,
+  p_org_id    uuid,
+  p_new_role  text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+declare
+  v_caller_id   uuid;
+  v_caller_role text;
+begin
+  select id into v_caller_id from trader_users where auth_user_id = auth.uid();
+
+  if v_caller_id = p_member_id then
+    return jsonb_build_object('ok', false, 'error', 'Cannot change your own role');
+  end if;
+
+  select org_role into v_caller_role
+  from org_memberships where user_id = v_caller_id and org_id = p_org_id;
+
+  if v_caller_role not in ('owner','admin') then
+    return jsonb_build_object('ok', false, 'error', 'Insufficient permissions');
+  end if;
+
+  if p_new_role = 'owner' and v_caller_role != 'owner' then
+    return jsonb_build_object('ok', false, 'error', 'Only the owner can transfer ownership');
+  end if;
+
+  update org_memberships
+  set org_role = p_new_role
+  where user_id = p_member_id and org_id = p_org_id;
+
+  update trader_users
+  set
+    org_role  = p_new_role,
+    user_type = case when p_new_role in ('owner','admin') then 'org_admin' else 'org_member' end
+  where id = p_member_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+ALTER FUNCTION promote_member(uuid, uuid, text) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION promote_member(uuid, uuid, text) TO authenticated;
+
+
+-- ── remove_member ─────────────────────────────────────────────
+-- Removes a member from an org. If they have no remaining
+-- memberships, resets them to indie.
+CREATE OR REPLACE FUNCTION remove_member(
+  p_member_id uuid,
+  p_org_id    uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+declare
+  v_caller_id   uuid;
+  v_caller_role text;
+  v_remaining   int;
+begin
+  select id into v_caller_id from trader_users where auth_user_id = auth.uid();
+
+  if v_caller_id = p_member_id then
+    return jsonb_build_object('ok', false, 'error', 'Cannot remove yourself');
+  end if;
+
+  select org_role into v_caller_role
+  from org_memberships where user_id = v_caller_id and org_id = p_org_id;
+
+  if v_caller_role not in ('owner','admin') then
+    return jsonb_build_object('ok', false, 'error', 'Insufficient permissions');
+  end if;
+
+  delete from org_memberships where user_id = p_member_id and org_id = p_org_id;
+
+  select count(*) into v_remaining
+  from org_memberships where user_id = p_member_id;
+
+  if v_remaining = 0 then
+    update trader_users
+    set user_type = 'indie', org_id = null, org_role = null
+    where id = p_member_id;
+  end if;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+ALTER FUNCTION remove_member(uuid, uuid) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION remove_member(uuid, uuid) TO authenticated;
+
+
+-- ── update_own_trade ──────────────────────────────────────────
+-- Lets a user edit allowed fields on their own trade.
+-- Every changed field is written to trade_audit_log.
+CREATE OR REPLACE FUNCTION update_own_trade(
+  p_trade_id  uuid,
+  p_quantity  numeric DEFAULT NULL,
+  p_stop_loss numeric DEFAULT NULL,
+  p_target    numeric DEFAULT NULL,
+  p_notes     text    DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+declare
+  v_user_id uuid;
+  v_trade   trades%rowtype;
+begin
+  select id into v_user_id from trader_users where auth_user_id = auth.uid();
+
+  select * into v_trade from trades
+  where id = p_trade_id and user_id = v_user_id and deleted_at is null;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'Trade not found or access denied');
+  end if;
+
+  update trades set
+    quantity  = coalesce(p_quantity,  quantity),
+    stop_loss = coalesce(p_stop_loss, stop_loss),
+    target    = coalesce(p_target,    target),
+    notes     = coalesce(p_notes,     notes)
+  where id = p_trade_id;
+
+  if p_quantity  is not null and p_quantity  is distinct from v_trade.quantity then
+    insert into trade_audit_log (trade_id,acted_by,action,field_name,old_value,new_value)
+    values (p_trade_id,v_user_id,'edit_quantity','quantity',
+            v_trade.quantity::text, p_quantity::text);
+  end if;
+  if p_stop_loss is not null and p_stop_loss is distinct from v_trade.stop_loss then
+    insert into trade_audit_log (trade_id,acted_by,action,field_name,old_value,new_value)
+    values (p_trade_id,v_user_id,'edit_stop_loss','stop_loss',
+            v_trade.stop_loss::text, p_stop_loss::text);
+  end if;
+  if p_target is not null and p_target is distinct from v_trade.target then
+    insert into trade_audit_log (trade_id,acted_by,action,field_name,old_value,new_value)
+    values (p_trade_id,v_user_id,'edit_target','target',
+            v_trade.target::text, p_target::text);
+  end if;
+  if p_notes is not null and p_notes is distinct from v_trade.notes then
+    insert into trade_audit_log (trade_id,acted_by,action,field_name,old_value,new_value)
+    values (p_trade_id,v_user_id,'edit_notes','notes', v_trade.notes, p_notes);
+  end if;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+ALTER FUNCTION update_own_trade(uuid, numeric, numeric, numeric, text) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION update_own_trade(uuid, numeric, numeric, numeric, text) TO authenticated;
+
+
+-- ── admin_soft_delete_trade ───────────────────────────────────
+-- Admin soft-deletes a trade in their org. Requires a reason.
+-- Sets deleted_at/deleted_by/delete_reason and writes audit log.
+CREATE OR REPLACE FUNCTION admin_soft_delete_trade(
+  p_trade_id uuid,
+  p_org_id   uuid,
+  p_reason   text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+declare
+  v_caller_id   uuid;
+  v_caller_role text;
+  v_trade       trades%rowtype;
+begin
+  if p_reason is null or trim(p_reason) = '' then
+    return jsonb_build_object('ok', false, 'error', 'A reason is required');
+  end if;
+
+  select id into v_caller_id from trader_users where auth_user_id = auth.uid();
+
+  select org_role into v_caller_role
+  from org_memberships where user_id = v_caller_id and org_id = p_org_id;
+
+  if v_caller_role not in ('owner','admin') then
+    return jsonb_build_object('ok', false, 'error', 'Insufficient permissions');
+  end if;
+
+  select t.* into v_trade
+  from trades t
+  join org_memberships om on om.user_id = t.user_id
+  where t.id = p_trade_id and om.org_id = p_org_id and t.deleted_at is null;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'Trade not found in your organisation');
+  end if;
+
+  update trades
+  set deleted_at = now(), deleted_by = v_caller_id, delete_reason = p_reason
+  where id = p_trade_id;
+
+  insert into trade_audit_log (trade_id, acted_by, action, reason)
+  values (p_trade_id, v_caller_id, 'soft_delete', p_reason);
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+ALTER FUNCTION admin_soft_delete_trade(uuid, uuid, text) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION admin_soft_delete_trade(uuid, uuid, text) TO authenticated;
+
+
+-- ── rename_organisation ───────────────────────────────────────
+-- Owner or admin renames their org.
+CREATE OR REPLACE FUNCTION rename_organisation(
+  p_org_id   uuid,
+  p_new_name text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+declare
+  v_caller_id   uuid;
+  v_caller_role text;
+begin
+  if p_new_name is null or trim(p_new_name) = '' then
+    return jsonb_build_object('ok', false, 'error', 'Name cannot be empty');
+  end if;
+
+  select id into v_caller_id
+  from trader_users where auth_user_id = auth.uid();
+
+  select org_role into v_caller_role
+  from org_memberships
+  where user_id = v_caller_id and org_id = p_org_id;
+
+  if v_caller_role not in ('owner','admin') then
+    return jsonb_build_object('ok', false, 'error', 'Insufficient permissions');
+  end if;
+
+  update organisations
+  set name = trim(p_new_name)
+  where id = p_org_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+ALTER FUNCTION rename_organisation(uuid, text) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION rename_organisation(uuid, text) TO authenticated;
+
+
+-- ── delete_organisation ───────────────────────────────────────
+-- Owner-only hard delete. Resets all members to indie, then
+-- cascades org_memberships and org_invites via FK.
+-- NOTE: superseded by super_admin_delete_org for super admins.
+-- Regular org owners (non-super-admin) still use this RPC.
+CREATE OR REPLACE FUNCTION delete_organisation(
+  p_org_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+declare
+  v_caller_id   uuid;
+  v_caller_role text;
+begin
+  select id into v_caller_id
+  from trader_users where auth_user_id = auth.uid();
+
+  if v_caller_id is null then
+    return jsonb_build_object('ok', false, 'error', 'User not found');
+  end if;
+
+  select org_role into v_caller_role
+  from org_memberships
+  where user_id = v_caller_id and org_id = p_org_id;
+
+  if v_caller_role != 'owner' then
+    return jsonb_build_object('ok', false, 'error', 'Only the organisation owner can delete it');
+  end if;
+
+  -- Reset all members to indie
+  update trader_users
+  set user_type = 'indie', org_id = null, org_role = null
+  where id in (
+    select user_id from org_memberships where org_id = p_org_id
+  );
+
+  -- org_memberships and org_invites cascade via FK on organisations
+  delete from organisations where id = p_org_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+ALTER FUNCTION delete_organisation(uuid) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION delete_organisation(uuid) TO authenticated;
+
+
+-- ── set_user_capital_limit ────────────────────────────────────
+-- NOTE: This RPC was referenced in setup.md but not found in the
+-- information_schema query. If it exists, it was likely created
+-- outside the tracked migrations. Check with:
+--   SELECT routine_name FROM information_schema.routines
+--   WHERE routine_name = 'set_user_capital_limit';
+-- If missing, create it:
+CREATE OR REPLACE FUNCTION set_user_capital_limit(
+  p_member_id    uuid,
+  p_org_id       uuid,
+  p_capital_limit numeric
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+declare
+  v_caller_id   uuid;
+  v_caller_role text;
+begin
+  select id into v_caller_id from trader_users where auth_user_id = auth.uid();
+
+  select org_role into v_caller_role
+  from org_memberships where user_id = v_caller_id and org_id = p_org_id;
+
+  if v_caller_role not in ('owner', 'admin') then
+    return jsonb_build_object('ok', false, 'error', 'Insufficient permissions');
+  end if;
+
+  -- Verify target is a member of this org
+  if not exists (
+    select 1 from org_memberships where user_id = p_member_id and org_id = p_org_id
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'User is not a member of this organisation');
+  end if;
+
+  update trader_users
+  set capital_limit = p_capital_limit
+  where id = p_member_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+ALTER FUNCTION set_user_capital_limit(uuid, uuid, numeric) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION set_user_capital_limit(uuid, uuid, numeric) TO authenticated;
