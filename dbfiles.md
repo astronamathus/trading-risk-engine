@@ -1,3 +1,24 @@
+-- Super Admin org creation patch 
+
+create or replace function public.super_admin_create_org(
+  p_name     text,
+  p_domain   text default null,
+  p_currency text default 'INR'
+)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  return create_org_with_owner(p_name, p_domain, p_currency);
+end;$$;
+
+alter function public.super_admin_create_org(text,text,text) owner to postgres;
+grant execute on function public.super_admin_create_org(text,text,text) to authenticated;
+
+notify pgrst, 'reload schema';
+
+
+
+
+
 -- ================================================================
 -- 000_full_setup.sql
 -- Trading Risk Engine — complete database setup from scratch.

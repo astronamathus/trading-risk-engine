@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth }      from "@/components/AuthProvider";
 import { setIndieUser, createOrganisation } from "@/lib/db/org";
 
-type Step = "pick_type" | "indie_currency" | "indie_confirm" | "org_pick" | "org_currency" | "org_join";
-type Currency = "INR" | "USD";
+type Step = "pick_type" | "org_pick" | "org_currency" | "org_join";
 
 function Card({ onClick, accent, icon, title, sub }: {
   onClick: () => void; accent: string;
@@ -27,14 +26,14 @@ function Card({ onClick, accent, icon, title, sub }: {
 }
 
 function CurrencyPicker({ value, onChange }: {
-  value: Currency; onChange: (c: Currency) => void;
+  value: "INR" | "USD"; onChange: (c: "INR" | "USD") => void;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {([
-        { code: "INR" as Currency, flag: "🇮🇳", label: "Indian Rupee", sub: "NSE & BSE · Nifty 500" },
-        { code: "USD" as Currency, flag: "🇺🇸", label: "US Dollar",    sub: "NYSE & NASDAQ · S&P 500" },
-      ] as const).map(opt => (
+        { code: "INR" as const, flag: "🇮🇳", label: "Indian Rupee", sub: "NSE & BSE · Nifty 500" },
+        { code: "USD" as const, flag: "🇺🇸", label: "US Dollar",    sub: "NYSE & NASDAQ · S&P 500" },
+      ]).map(opt => (
         <button key={opt.code} onClick={() => onChange(opt.code)}
           className={`rounded-2xl border p-5 flex flex-col gap-2 text-left transition-all
             focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -49,9 +48,6 @@ function CurrencyPicker({ value, onChange }: {
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{opt.sub}</p>
           </div>
-          {value === opt.code && (
-            <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">✓ Selected</span>
-          )}
         </button>
       ))}
     </div>
@@ -60,13 +56,13 @@ function CurrencyPicker({ value, onChange }: {
 
 function OnboardingInner() {
   const { user, refresh, isSuperAdmin } = useAuth();
-  const router            = useRouter();
-  const searchParams      = useSearchParams();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
 
   const [step,       setStep]       = useState<Step>(
     (searchParams.get("step") as Step) ?? "pick_type"
   );
-  const [currency,   setCurrency]   = useState<Currency>("INR");
+  const [currency,   setCurrency]   = useState<"INR" | "USD">("INR");
   const [inviteCode, setInviteCode] = useState("");
   const [orgName,    setOrgName]    = useState("");
   const [orgDomain,  setOrgDomain]  = useState("");
@@ -75,16 +71,16 @@ function OnboardingInner() {
 
   const firstName = user?.name?.split(" ")[0] ?? "";
 
-  // Super admins never need onboarding — bounce them back
   useEffect(() => {
     if (isSuperAdmin) router.replace("/super");
   }, [isSuperAdmin, router]);
 
+  // Solo trader — no currency step, just set indie with default INR
   async function handleIndie() {
     if (!user) return;
     setLoading(true); setError(null);
     try {
-      await setIndieUser(user.id, currency);
+      await setIndieUser(user.id, "INR");
       await refresh();
       router.replace("/dashboard");
     } catch (err) {
@@ -119,14 +115,6 @@ function OnboardingInner() {
     "placeholder:text-slate-400 dark:placeholder:text-slate-500 " +
     "focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
 
-  const backBtn = (to: Step) => (
-    <button onClick={() => setStep(to)}
-      className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
-        transition-colors text-center pt-1">
-      ← Back
-    </button>
-  );
-
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-10
       bg-slate-50 dark:bg-[#0d1117]">
@@ -151,7 +139,7 @@ function OnboardingInner() {
         {/* Step 1 — pick type */}
         {step === "pick_type" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card onClick={() => setStep("indie_currency")}
+            <Card onClick={handleIndie}
               accent="border-slate-200 dark:border-slate-700 hover:border-blue-500 focus:ring-blue-500"
               icon={
                 <svg className="w-8 h-8 text-blue-400" viewBox="0 0 32 32" fill="none"
@@ -180,76 +168,7 @@ function OnboardingInner() {
           </div>
         )}
 
-        {/* Step 2a — indie currency */}
-        {step === "indie_currency" && (
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700
-            bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-5">
-            <div>
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Which market do you trade?
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                This sets your default currency and stock list. You can still enter any ticker manually.
-              </p>
-            </div>
-            <CurrencyPicker value={currency} onChange={setCurrency}/>
-            <div className="flex gap-3">
-              <button onClick={() => setStep("pick_type")}
-                className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600
-                  px-4 py-2.5 text-sm text-slate-500 dark:text-slate-400
-                  hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                Back
-              </button>
-              <button onClick={() => setStep("indie_confirm")}
-                className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm
-                  font-semibold text-white hover:bg-blue-500 transition-colors">
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2b — indie confirm */}
-        {step === "indie_confirm" && (
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700
-            bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-4">
-            <div className="flex items-center gap-3 p-3 rounded-xl
-              bg-slate-50 dark:bg-slate-700/40 border border-slate-200 dark:border-slate-700">
-              <span className="text-2xl">{currency === "INR" ? "🇮🇳" : "🇺🇸"}</span>
-              <div>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  {currency === "INR" ? "Indian Markets (INR)" : "US Markets (USD)"}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-500">
-                  {currency === "INR" ? "NSE & BSE · Nifty 500" : "NYSE & NASDAQ · S&P 500"}
-                </p>
-              </div>
-              <button onClick={() => setStep("indie_currency")}
-                className="ml-auto text-xs text-blue-500 hover:text-blue-400 underline">
-                Change
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Full control of your trades and portfolio. No one else can see your data.
-              You can join an organisation later via an invite link.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setStep("indie_currency")}
-                className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600
-                  px-4 py-2.5 text-sm text-slate-500 dark:text-slate-400
-                  hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                Back
-              </button>
-              <button onClick={handleIndie} disabled={loading}
-                className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm
-                  font-semibold text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
-                {loading ? "Setting up…" : "Get started"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3 — org: admin or join */}
+        {/* Step 2 — org: create or join */}
         {step === "org_pick" && (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700
             bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-4">
@@ -282,11 +201,15 @@ function OnboardingInner() {
                 </p>
               </button>
             </div>
-            {backBtn("pick_type")}
+            <button onClick={() => setStep("pick_type")}
+              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
+                transition-colors text-center pt-1">
+              ← Back
+            </button>
           </div>
         )}
 
-        {/* Step 4 — org currency picker */}
+        {/* Step 3 — org currency + name */}
         {step === "org_currency" && (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700
             bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-5">
@@ -301,7 +224,6 @@ function OnboardingInner() {
             </div>
             <CurrencyPicker value={currency} onChange={setCurrency}/>
 
-            {/* Org name + domain inline */}
             <div className="flex flex-col gap-3 border-t border-slate-200 dark:border-slate-700 pt-4">
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -338,7 +260,7 @@ function OnboardingInner() {
           </div>
         )}
 
-        {/* Step 5 — join with code */}
+        {/* Step 4 — join with code */}
         {step === "org_join" && (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700
             bg-white dark:bg-slate-800/50 p-6 flex flex-col gap-4">
