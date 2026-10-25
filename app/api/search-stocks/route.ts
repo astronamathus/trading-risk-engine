@@ -5,7 +5,8 @@
 // Usage: GET /api/search-stocks?ticker=RELIANCE.NS
 // Returns: { success, ticker, price }
 // ============================================================
-import { fetchStockPrice, detectMarket } from "@/lib/pricing";
+import { fetchStockPrice } from "@/lib/pricing";
+import { marketFromTicker } from "@/lib/currency";
 import type { Market } from "@/lib/pricing";
 
 export async function GET(req: Request) {
@@ -18,14 +19,14 @@ export async function GET(req: Request) {
   }
 
   try {
-    const resolvedMarket = market ?? detectMarket(ticker);
+    const resolvedMarket = market ?? marketFromTicker(ticker);
     const price = await fetchStockPrice(ticker, resolvedMarket);
 
     // Determine exchange label
     const isINR = resolvedMarket === "INR";
     const exchange = isINR
       ? (ticker.toUpperCase().endsWith(".BO") ? "BSE" : "NSE")
-      : (ticker.toUpperCase().includes(".") ? "NYSE" : "NYSE");
+      : (ticker.toUpperCase().includes(".") ? "NYSE" : "NASDAQ");
 
     return Response.json({
       success:  true,
