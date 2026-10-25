@@ -30,7 +30,10 @@ function tickLabel(ts: number) {
 }
 
 export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
-  const currencyTrades = trades.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === (trades[0]?.currency ?? marketFromTicker(trades[0]?.ticker ?? "RELIANCE.NS")));
+  const availableCurrencies = [...new Set(trades.map(t => t.currency ?? marketFromTicker(t.ticker)))];
+  const [selectedCurrency, setSelectedCurrency] = useState<"INR" | "USD" | null>(null);
+  const activeCurrency = selectedCurrency ?? (availableCurrencies.includes("INR") ? "INR" : "USD");
+  const currencyTrades = trades.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === activeCurrency);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const { fullSeries, monthlyBars, openMtm } = useMemo(() => {
@@ -171,7 +174,14 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2">
+          {availableCurrencies.length > 1 && (["INR", "USD"] as const).map(currency => (
+            <button key={currency} onClick={() => { setSelectedCurrency(currency); setSelectedMonth(null); }}
+              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${activeCurrency === currency ? "border-blue-500 bg-blue-600 text-white" : "border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400"}`}>
+              {currency}
+            </button>
+          ))}
+          <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
           {!isEmpty && (
             <span className={`font-semibold ${isPositive
               ? "text-emerald-600 dark:text-emerald-400"
@@ -190,6 +200,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
               MTM
             </span>
           )}
+          </div>
         </div>
       </div>
 
