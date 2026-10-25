@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { CalculationResult } from "@/types";
 import { recalculateWithCapitalLimit } from "@/lib/calculations";
 import { ExchangeBadge } from "@/components/CalculatorForm";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface ResultsPanelProps {
   result:          CalculationResult;
   ticker:          string;
   totalCapital:    number;
   fetchedAt:       Date;
-  exchange:        "NSE" | "BSE";
+  exchange:        "NSE" | "BSE" | "NYSE" | "NASDAQ";
   onDisplayChange: (qty: number, risk: number, capitalRequired: number) => void;
 }
 
@@ -139,9 +140,9 @@ export default function ResultsPanel({
 
       {/* Row 1 */}
       <div className="grid grid-cols-2 gap-3">
-        <Tile label="Entry Price"    value={formatINR(entryPrice)}  tooltip="Current market price fetched live"/>
-        <Tile label="Target" value={formatINR(target)} tooltip="Entry + risk per share × reward/risk ratio"/>
-        <Tile label="Risk Per Share" value={formatINR(riskPerShare)} tooltip="Entry Price − Stop Loss"/>
+        <Tile label="Entry Price"    value={formatINR(entryPrice, ticker)}  tooltip="Current market price fetched live"/>
+        <Tile label="Target" value={formatINR(target, ticker)} tooltip="Entry + risk per share × reward/risk ratio"/>
+        <Tile label="Risk Per Share" value={formatINR(riskPerShare, ticker)} tooltip="Entry Price − Stop Loss"/>
         <Tile label="Risk:Reward" value={`${riskRatio} : ${rewardRatio}`} tooltip="Editable trade settings ratio"/>
       </div>
 
@@ -160,9 +161,9 @@ export default function ResultsPanel({
           </span>
           <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className={`text-xl font-bold ${riskExceedsMax ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-slate-100"}`}>
-              {formatINR(display.actualRisk)}
+              {formatINR(display.actualRisk, ticker)}
             </span>
-            <span className="text-sm text-slate-400 dark:text-slate-500">/ {formatINR(maxRiskAmount)}</span>
+            <span className="text-sm text-slate-400 dark:text-slate-500">/ {formatINR(maxRiskAmount, ticker)}</span>
           </div>
           <div className="flex items-center gap-1 mt-0.5">
             <span className="text-xs text-slate-400 dark:text-slate-500">actual / max</span>
@@ -277,7 +278,7 @@ export default function ResultsPanel({
         </div>
 
         <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-          {formatINR(display.capitalRequired)}
+          {formatINR(display.capitalRequired, ticker)}
         </span>
 
         <span className="text-xs text-slate-500 italic">
