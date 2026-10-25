@@ -320,7 +320,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
               <td className="pt-3 font-medium text-slate-500 dark:text-slate-400">
                 {tableRows.length} position{tableRows.length !== 1 ? "s" : ""}
               </td>
-              <td className="pt-3 tabular-nums text-amber-400 font-medium">{formatINR(totalRisk, tableRows[0]?.trade.ticker ?? "RELIANCE.NS")}</td>
+              <td className="pt-3 tabular-nums text-amber-400 font-medium">{totalRiskLabel}</td>
               <td className="pt-3">100%</td>
               <td className="pt-3"/>
               <td className={`pt-3 tabular-nums font-medium ${
