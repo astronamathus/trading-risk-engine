@@ -56,7 +56,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
       return {
         ts:       new Date(t.created_at).getTime(),
         realised: Math.round(cum),
-        ticker:   t.ticker.replace(/\.(NS|BO)$/, ""),
+        ticker:   t.ticker,
         month:    new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
       };
     });
