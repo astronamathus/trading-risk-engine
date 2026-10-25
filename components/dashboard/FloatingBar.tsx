@@ -78,18 +78,15 @@ export default function FloatingBar({ trades, livePrices, capitalLimit }: Floati
           label="Portfolio Risk"
           value={`INR ${inr.riskPct.toFixed(2)}% · USD ${usd.riskPct.toFixed(2)}%`}
           colour={
-            portfolioRiskPct > 5  ? "text-red-400"
-            : portfolioRiskPct > 2 ? "text-amber-400"
+            inr.riskPct > 5 || usd.riskPct > 5 ? "text-red-400"
+            : inr.riskPct > 2 || usd.riskPct > 2 ? "text-amber-400"
             : "text-slate-900 dark:text-slate-100"
           }
         />
         <Stat
           label="Expectancy"
           value={expectancyDisplay}
-          colour={
-            expectancy === null ? "text-slate-400 dark:text-slate-500"
-            : expectancy >= 0 ? "text-emerald-400" : "text-red-400"
-          }
+          colour="text-slate-900 dark:text-slate-100"
         />
         <Stat
           label="Open Positions"
@@ -99,8 +96,8 @@ export default function FloatingBar({ trades, livePrices, capitalLimit }: Floati
           label="Remaining Capital"
           value={remainingDisplay}
           colour={
-            remainingPct < 20 ? "text-red-400"
-            : remainingPct < 50 ? "text-amber-400"
+            inr.remainingPct < 20 || usd.remainingPct < 20 ? "text-red-400"
+            : inr.remainingPct < 50 || usd.remainingPct < 50 ? "text-amber-400"
             : "text-slate-900 dark:text-slate-100"
           }
         />
