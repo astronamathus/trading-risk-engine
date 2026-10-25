@@ -45,7 +45,8 @@ Each one is a separate paste-and-run — do not combine them.
 1. **Core schema** — creates `trader_users`, `trades`, `org_memberships`, `org_groups`, `org_group_members`, `org_invites`
 2. **`create_portfolio_snapshots.sql`** — creates `portfolio_snapshots` table, RLS policies, and the `record_portfolio_snapshot` RPC
 3. **`add_capital_limit.sql`** — adds `capital_limit` and `user_r_ratio` columns to `trader_users`, creates `set_user_capital_limit` RPC
-4. **All RPC functions** — `get_org_leaderboard`, `get_org_groups`, `set_group_member`, `remove_group_member`, `create_group`, `rename_group`, `delete_group`, `toggle_leaderboard_visibility`
+4. **`supabase/migrations/202610240001_market_currency_pools.sql`** — adds a `currency` column to trades (existing trades default to INR) and a separate USD capital limit (`capital_limit_usd`, default $10,000). Run this after the core schema and capital-limit migration.
+5. **All RPC functions** — `get_org_leaderboard`, `get_org_groups`, `set_group_member`, `remove_group_member`, `create_group`, `rename_group`, `delete_group`, `toggle_leaderboard_visibility`
 
 After running, confirm the tables exist under **Database → Tables**.
 

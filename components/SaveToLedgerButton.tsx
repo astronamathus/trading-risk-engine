@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { saveTrade } from "@/lib/db/trades";
 import { CalculationResult } from "@/types";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface SaveToLedgerButtonProps {
   userId:            string | null;
@@ -19,9 +20,7 @@ interface SaveToLedgerButtonProps {
 
 type ToastState = "idle" | "saving" | "success" | "error" | "insufficient";
 
-function formatINR(v: number) {
-  return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 export default function SaveToLedgerButton({
   userId, ticker, result, displayedQty, displayedRisk,
@@ -71,6 +70,7 @@ export default function SaveToLedgerButton({
       await saveTrade({
         user_id:      userId,
         ticker,
+        currency: marketFromTicker(ticker),
         entry_price:  result.entryPrice,
         entry_target: isQueued ? result.entryPrice : undefined,
         stop_loss:    parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
@@ -100,8 +100,8 @@ export default function SaveToLedgerButton({
             Insufficient capital
           </p>
           <p className="text-xs text-red-500 dark:text-red-500">
-            This trade requires {formatINR(displayedCapReq)} but you only have{" "}
-            {formatINR(availableCapital!)} available
+            This trade requires {formatINR(displayedCapReq, ticker)} but you only have{" "}
+            {formatINR(availableCapital!, ticker)} available
             {availableCapital! < 0 ? " (capital fully deployed)" : ""}.
           </p>
         </div>
@@ -160,7 +160,7 @@ export default function SaveToLedgerButton({
                 <circle cx="8" cy="8" r="6.5"/>
                 <path d="M8 4.5V8l2.5 2"/>
               </svg>
-              Trade queued — activates when price hits ₹{result.entryPrice.toLocaleString("en-IN")}
+              Trade queued — activates when price hits {formatMoney(result.entryPrice, marketFromTicker(ticker))}
             </span>
           ) : (
             <span className="text-emerald-400">✓ Trade saved to ledger</span>

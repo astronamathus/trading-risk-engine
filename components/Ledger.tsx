@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Trade, updateTradeStatus, closeTrade } from "@/lib/db/trades";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface LedgerProps {
   trades:        Trade[];
@@ -13,11 +14,7 @@ interface LedgerProps {
 
 type PnlMode = "value" | "percent";
 
-function formatINR(v: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 2,
-  }).format(v);
-}
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 function StatusBadge({ status }: { status: Trade["status"] }) {
   const styles: Record<Trade["status"], string> = {
@@ -80,7 +77,7 @@ function PnlValue({ trade, ltp, mode, loading }: {
     const pct    = trade.entry_price > 0
       ? (trade.realised_pnl / (trade.entry_price * trade.quantity)) * 100 : 0;
     const text = mode === "value"
-      ? `${profit ? "+" : ""}${formatINR(trade.realised_pnl)}`
+      ? `${profit ? "+" : ""}${formatINR(trade.realised_pnl, trade.ticker)}`
       : `${profit ? "+" : ""}${pct.toFixed(2)}%`;
     return (
       <span className={`${colour} font-medium tabular-nums`}>
@@ -100,7 +97,7 @@ function PnlValue({ trade, ltp, mode, loading }: {
   const profit = diff >= 0;
   const colour = profit ? "text-emerald-400" : "text-red-400";
   const text   = mode === "value"
-    ? `${profit ? "+" : ""}${formatINR(pnlVal)}`
+    ? `${profit ? "+" : ""}${formatINR(pnlVal, trade.ticker)}`
     : `${profit ? "+" : ""}${pnlPct.toFixed(2)}%`;
   return (
     <span className={`${colour} font-medium tabular-nums`}>
@@ -145,8 +142,8 @@ function DetailPanel({ trade, ltp, onAction }: {
   );
   const priceLabel = trade.status === "OPEN" ? "LTP" : "Exit";
   const priceValue = trade.status === "OPEN"
-    ? (ltp ? formatINR(ltp) : "—")
-    : (trade.exit_price ? formatINR(trade.exit_price) : "—");
+    ? (ltp ? formatINR(ltp, trade.ticker) : "—")
+    : (trade.exit_price ? formatINR(trade.exit_price, trade.ticker) : "—");
   const priceColour = trade.status === "OPEN" ? "text-blue-300" : "text-amber-300";
 
   return (
@@ -155,9 +152,9 @@ function DetailPanel({ trade, ltp, onAction }: {
 
         <div className="grid grid-cols-5 gap-3 text-xs">
           {[
-            { label: "Entry",     value: formatINR(trade.entry_price), colour: "text-slate-700 dark:text-slate-300"   },
-            { label: "Stop Loss", value: formatINR(trade.stop_loss),   colour: "text-red-400"     },
-            { label: "Target",    value: formatINR(target),            colour: "text-emerald-400" },
+            { label: "Entry",     value: formatINR(trade.entry_price, trade.ticker), colour: "text-slate-700 dark:text-slate-300"   },
+            { label: "Stop Loss", value: formatINR(trade.stop_loss, trade.ticker),   colour: "text-red-400"     },
+            { label: "Target",    value: formatINR(target, trade.ticker),            colour: "text-emerald-400" },
             { label: priceLabel,  value: priceValue,                   colour: priceColour        },
             { label: "Risk:Reward", value: `1 : ${rrReward.toFixed(2)}`,       colour: "text-slate-700 dark:text-slate-300"   },
           ].map(({ label, value, colour }) => (
@@ -200,7 +197,7 @@ function DetailPanel({ trade, ltp, onAction }: {
               trade.realised_pnl >= 0 ? "text-emerald-400" : "text-red-400"
             }`}>
               <PnlArrow profit={trade.realised_pnl >= 0}/>
-              {trade.realised_pnl >= 0 ? "+" : ""}{formatINR(trade.realised_pnl)}
+              {trade.realised_pnl >= 0 ? "+" : ""}{formatINR(trade.realised_pnl, trade.ticker)}
             </div>
           </div>
         )}
@@ -219,7 +216,7 @@ function DetailPanel({ trade, ltp, onAction }: {
                 {unrealisedPnl !== null ? (
                   <span className={`font-semibold tabular-nums ${pnlPositive ? "text-emerald-400" : "text-red-400"}`}>
                     <PnlArrow profit={pnlPositive}/>
-                    {pnlPositive ? "+" : ""}{formatINR(unrealisedPnl)}
+                    {pnlPositive ? "+" : ""}{formatINR(unrealisedPnl, trade.ticker)}
                   </span>
                 ) : <span className="text-slate-400 dark:text-slate-600">—</span>}
               </div>
@@ -426,13 +423,13 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh, e
                     {trade.quantity.toLocaleString("en-IN")}
                   </td>
                   <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
-                    {formatINR(trade.entry_price)}
+                    {formatINR(trade.entry_price, trade.ticker)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {trade.status === "QUEUED" ? (
                       ltp !== undefined ? (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-slate-400 dark:text-slate-400 text-xs">{formatINR(ltp)}</span>
+                          <span className="text-slate-400 dark:text-slate-400 text-xs">{formatINR(ltp, trade.ticker)}</span>
                           <span className="text-amber-400 text-xs">
                             {((trade.entry_price - ltp) / ltp * 100).toFixed(2)}% away
                           </span>
@@ -443,7 +440,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh, e
                     ) : pricesLoading && ltp === undefined ? (
                       <span className="text-slate-400 dark:text-slate-600 text-xs animate-pulse">…</span>
                     ) : ltp !== undefined ? (
-                      <span className="text-slate-700 dark:text-slate-300">{formatINR(ltp)}</span>
+                      <span className="text-slate-700 dark:text-slate-300">{formatINR(ltp, trade.ticker)}</span>
                     ) : (
                       <span className="text-slate-400 dark:text-slate-600">—</span>
                     )}
@@ -452,14 +449,14 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh, e
                     {(() => {
                       if (trade.status === "OPEN") {
                         const v = ltp !== undefined ? ltp * trade.quantity : null;
-                        return v !== null ? formatINR(v) : <span className="text-slate-400 dark:text-slate-600">—</span>;
+                        return v !== null ? formatINR(v, trade.ticker) : <span className="text-slate-400 dark:text-slate-600">—</span>;
                       }
                       if (trade.exit_price) return formatINR(trade.exit_price * trade.quantity);
                       return <span className="text-slate-400 dark:text-slate-600">—</span>;
                     })()}
                   </td>
                   <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
-                    {trade.risk_amount ? formatINR(trade.risk_amount) : "—"}
+                    {trade.risk_amount ? formatINR(trade.risk_amount, trade.ticker) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <PnlValue trade={trade} ltp={ltp} mode={pnlMode} loading={pricesLoading}/>
@@ -484,65 +481,32 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh, e
             })}
           </tbody>
 
-          {(() => {
-            // Sum across ALL visible trades (respects the active filter chip)
-            const totalEntry = trades.reduce((sum, t) =>
-              sum + t.entry_price * t.quantity, 0);
-
-            const totalValue = trades.reduce((sum, t) => {
-              if (t.status === "OPEN") {
-                const ltp = livePrices[t.ticker];
-                return sum + (ltp !== undefined ? ltp * t.quantity : t.entry_price * t.quantity);
-              }
-              if (t.exit_price) return sum + t.exit_price * t.quantity;
-              return sum + t.entry_price * t.quantity;
-            }, 0);
-
-            const totalRisk = trades.reduce((sum, t) => sum + (t.risk_amount ?? 0), 0);
-
-            const totalPnl = trades.reduce((sum, t) => {
-              if (t.status === "OPEN") {
-                const ltp = livePrices[t.ticker];
-                return sum + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0);
-              }
-              return sum + (t.realised_pnl ?? 0);
-            }, 0);
-
-            const pnlPositive = totalPnl >= 0;
-            const openCount   = trades.filter(t => t.status === "OPEN").length;
-
-            return (
-              <tfoot className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
-                <tr className="text-xs text-slate-400 dark:text-slate-400">
-                  <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">
-                    Portfolio
-                    <div className="text-slate-400 dark:text-slate-600 font-normal">
-                      {trades.length} trade{trades.length !== 1 ? "s" : ""}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3"/>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-500 dark:text-slate-400">
-                    {formatINR(totalEntry)}
-                  </td>
-                  <td className="px-4 py-3"/>
-                  <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200">
-                    {formatINR(totalValue)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-400 dark:text-slate-400">
-                    {formatINR(totalRisk)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-medium">
-                    <span className={pnlPositive ? "text-emerald-400" : "text-red-400"}>
-                      <PnlArrow profit={pnlPositive}/>
-                      {pnlPositive ? "+" : ""}{formatINR(totalPnl)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3"/>
-                  <td className="px-4 py-3"/>
-                </tr>
-              </tfoot>
-            );
-          })()}
+          <tfoot className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+            {(["INR", "USD"] as const).map(currency => {
+              const pool = trades.filter(t => (t.currency ?? "INR") === currency);
+              if (!pool.length) return null;
+              const totalEntry = pool.reduce((sum, t) => sum + t.entry_price * t.quantity, 0);
+              const totalValue = pool.reduce((sum, t) => {
+                const ltp = t.status === "OPEN" ? livePrices[t.ticker] : undefined;
+                return sum + (ltp !== undefined ? ltp * t.quantity : (t.exit_price ?? t.entry_price) * t.quantity);
+              }, 0);
+              const totalRisk = pool.reduce((sum, t) => sum + (t.risk_amount ?? 0), 0);
+              const totalPnl = pool.reduce((sum, t) => {
+                const ltp = t.status === "OPEN" ? livePrices[t.ticker] : undefined;
+                return sum + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : (t.realised_pnl ?? 0));
+              }, 0);
+              return <tr key={currency} className="text-xs text-slate-400 dark:text-slate-400">
+                <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{currency} pool<div className="text-slate-400 dark:text-slate-600 font-normal">{pool.length} trades</div></td>
+                <td className="px-4 py-3"/>
+                <td className="px-4 py-3 text-right tabular-nums">{formatMoney(totalEntry, currency)}</td>
+                <td className="px-4 py-3"/>
+                <td className="px-4 py-3 text-right tabular-nums">{formatMoney(totalValue, currency)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{formatMoney(totalRisk, currency)}</td>
+                <td className="px-4 py-3 text-right tabular-nums"><span className={totalPnl >= 0 ? "text-emerald-400" : "text-red-400"}>{totalPnl >= 0 ? "+" : ""}{formatMoney(totalPnl, currency)}</span></td>
+                <td className="px-4 py-3"/><td className="px-4 py-3"/>
+              </tr>;
+            })}
+          </tfoot>
         </table>
       </div>
     </div>

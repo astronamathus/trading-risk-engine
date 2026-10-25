@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CalculatorInputs } from "@/types";
 import { searchStocks } from "@/lib/stockList";
+import { currencySymbol, formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface Suggestion {
   symbol:   string;
@@ -12,6 +13,7 @@ interface Suggestion {
 }
 
 interface CalculatorFormProps {
+  capitalPools: { INR: number; USD: number };
   onSubmit:  (inputs: CalculatorInputs & { entryPrice: number }) => void;
   isLoading: boolean;
 }
@@ -62,12 +64,14 @@ const inputClass =
   "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent " +
   "transition-all text-sm";
 
-export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormProps) {
+export default function CalculatorForm({ onSubmit, isLoading, capitalPools }: CalculatorFormProps) {
   const [ticker,      setTicker]      = useState("");
   const [entryPrice,  setEntryPrice]  = useState("");
   const [stopLoss,    setStopLoss]    = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [capital,      setCapital]      = useState("100000");
+  const [market, setMarket] = useState<"INR" | "USD">("INR");
+  useEffect(() => { setCapital(String(capitalPools[market])); }, [capitalPools, market]);
   const [riskPercent,  setRiskPercent]  = useState("1");
   const [riskRatio,    setRiskRatio]    = useState("1");
   const [rewardRatio,  setRewardRatio]  = useState("2");
@@ -124,6 +128,9 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       const price = data.price as number;
+      const resolvedMarket = (data.market ?? marketFromTicker(rawTicker)) as "INR" | "USD";
+      setMarket(resolvedMarket);
+      setCapital(String(capitalPools[resolvedMarket]));
       setLtp(price);
       setEntryPrice(price.toFixed(2));
     } catch (err) {
@@ -134,7 +141,8 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   }
 
   function handleSelect(s: Suggestion) {
-    setTicker(s.symbol); setSelectedExchange(s.exchange);
+    setTicker(s.symbol); setSelectedExchange(s.exchange); setMarket(s.market);
+    setCapital(String(capitalPools[s.market]));
     setSuggestions([]); setShowSuggestions(false);
     fetchLtp(s.symbol);
   }
@@ -156,7 +164,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation();
     onSubmit({
-      ticker: ticker.trim(), stopLoss: parseFloat(stopLoss),
+      ticker: ticker.trim(), market, exchange: selectedExchange ?? (market === "INR" ? "NSE" : "NYSE"), stopLoss: parseFloat(stopLoss),
       capital: parseFloat(capital), riskPercent: parseFloat(riskPercent),
       riskRatio: parseFloat(riskRatio), rewardRatio: parseFloat(rewardRatio),
       entryPrice: parseFloat(entryPrice),
@@ -167,7 +175,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   const entryHint: React.ReactNode = ltp && entryNum && !isNaN(entryNum) ? (
     entryNum > ltp ? (
       <span className="text-amber-600 dark:text-amber-400">
-        ↑ Above LTP — trade will be <strong>queued</strong> until price reaches ₹{entryNum.toLocaleString("en-IN")}
+        ↑ Above LTP — trade will be <strong>queued</strong> until price reaches {formatMoney(entryNum, market)}
       </span>
     ) : entryNum < ltp ? (
       <span className="text-blue-600 dark:text-blue-400">↓ Below LTP — entry is immediate</span>
@@ -182,7 +190,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
     <span className="flex items-center gap-1.5">
       {selectedExchange && <ExchangeBadge exchange={selectedExchange}/>}
       <span className="text-emerald-600 dark:text-emerald-400">
-        LTP: ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        LTP: {formatMoney(ltp, market)}
       </span>
     </span>
   ) : "Type symbol or company name — add .NS for NSE, .BO for BSE";
@@ -284,14 +292,14 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       </Field>
 
       {/* Entry Price */}
-      <Field label="Entry Price (₹)" hint={entryHint ?? "Auto-filled from LTP — edit to queue at a different price"}>
+      <Field label={`Entry Price (${currencySymbol(market)})`} hint={entryHint ?? "Auto-filled from LTP — edit to queue at a different price"}>
         <input type="number" className={inputClass} placeholder="e.g. 2300"
           value={entryPrice} onChange={e => setEntryPrice(e.target.value)}
           disabled={isLoading} min="0.01" step="0.01" required/>
       </Field>
 
       {/* Stop Loss */}
-      <Field label="Stop Loss (₹)" hint="Price at which you'll exit if the trade moves against you">
+      <Field label={`Stop Loss (${currencySymbol(market)})`} hint="Price at which you'll exit if the trade moves against you">
         <input type="number" className={inputClass} placeholder="e.g. 2200"
           value={stopLoss} onChange={e => setStopLoss(e.target.value)}
           disabled={isLoading} min="0.01" step="0.01" required/>

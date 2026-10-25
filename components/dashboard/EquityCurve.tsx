@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { Trade } from "@/lib/db/trades";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface EquityCurveProps {
   trades:     Trade[];
@@ -14,15 +15,7 @@ interface EquityCurveProps {
 
 const CLOSED_STATUSES = ["CLOSED", "STOPPED", "TARGET_HIT"] as const;
 
-function formatINR(v: number) {
-  const abs = Math.abs(v);
-  const str = abs >= 100000
-    ? `₹${(abs / 100000).toFixed(2)}L`
-    : abs >= 1000
-      ? `₹${(abs / 1000).toFixed(1)}k`
-      : `₹${abs.toFixed(0)}`;
-  return v < 0 ? `-${str}` : str;
-}
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 function pickTicks(len: number, max = 6): number[] {
   if (len <= max) return Array.from({ length: len }, (_, i) => i);
@@ -37,15 +30,19 @@ function tickLabel(ts: number) {
 }
 
 export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
+  const availableCurrencies = [...new Set(trades.map(t => t.currency ?? marketFromTicker(t.ticker)))];
+  const [selectedCurrency, setSelectedCurrency] = useState<"INR" | "USD" | null>(null);
+  const activeCurrency = selectedCurrency ?? (availableCurrencies.includes("INR") ? "INR" : "USD");
+  const currencyTrades = trades.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === activeCurrency);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const { fullSeries, monthlyBars, openMtm } = useMemo(() => {
-    const closed = trades
+    const closed = currencyTrades
       .filter(t => (CLOSED_STATUSES as readonly string[]).includes(t.status) && t.realised_pnl !== null)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     // Current unrealised P&L across all open positions
-    const openPnl = trades
+    const openPnl = currencyTrades
       .filter(t => t.status === "OPEN")
       .reduce((s, t) => {
         const ltp = livePrices[t.ticker];
@@ -59,7 +56,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
       return {
         ts:       new Date(t.created_at).getTime(),
         realised: Math.round(cum),
-        ticker:   t.ticker.replace(/\.(NS|BO)$/, ""),
+        ticker:   t.ticker,
         month:    new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
       };
     });
@@ -95,7 +92,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
     const monthlyBars = Object.entries(map).map(([month, pnl]) => ({ month, pnl: Math.round(pnl) }));
 
     return { fullSeries: pointsWithMtm, monthlyBars, openMtm: Math.round(openPnl) };
-  }, [trades, livePrices]);
+  }, [currencyTrades, livePrices]);
 
   // Filter to selected month (rebased to zero at month start)
   const series = useMemo(() => {
@@ -149,7 +146,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
               </span>
               <span className="font-semibold tabular-nums"
                 style={{ color: p.value >= 0 ? "#10b981" : "#f87171" }}>
-                {p.value >= 0 ? "+" : ""}{formatINR(p.value)}
+                {p.value >= 0 ? "+" : ""}{formatINR(p.value, chartData[0]?.ticker ?? "RELIANCE.NS")}
               </span>
             </div>
           ) : null
@@ -177,12 +174,19 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2">
+          {availableCurrencies.length > 1 && (["INR", "USD"] as const).map(currency => (
+            <button key={currency} onClick={() => { setSelectedCurrency(currency); setSelectedMonth(null); }}
+              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${activeCurrency === currency ? "border-blue-500 bg-blue-600 text-white" : "border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400"}`}>
+              {currency}
+            </button>
+          ))}
+          <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
           {!isEmpty && (
             <span className={`font-semibold ${isPositive
               ? "text-emerald-600 dark:text-emerald-400"
               : "text-red-600 dark:text-red-400"}`}>
-              {isPositive ? "+" : ""}{formatINR(displayTotal)} total
+              {isPositive ? "+" : ""}{formatINR(displayTotal, chartData[chartData.length - 1]?.ticker ?? "RELIANCE.NS")} total
             </span>
           )}
           <span className="flex items-center gap-1.5">
@@ -196,6 +200,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
               MTM
             </span>
           )}
+          </div>
         </div>
       </div>
 
@@ -236,7 +241,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
             <YAxis
               tick={{ fill: "#94a3b8", fontSize: 11 }}
               axisLine={false} tickLine={false}
-              tickFormatter={v => formatINR(v)}
+              tickFormatter={v => formatINR(v, chartData[0]?.ticker ?? "RELIANCE.NS")}
               width={58}
             />
 
@@ -307,7 +312,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
                       ? "text-emerald-600 dark:text-emerald-400"
                       : "text-red-600 dark:text-red-400"
                   }`}>
-                    {pos ? "+" : ""}{formatINR(pnl)}
+                    {pos ? "+" : ""}{formatINR(pnl, currencyTrades.find(t => new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }) === month)?.ticker ?? "RELIANCE.NS")}
                   </span>
                 </button>
               );
