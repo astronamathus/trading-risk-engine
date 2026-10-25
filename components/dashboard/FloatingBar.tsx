@@ -1,6 +1,7 @@
 "use client";
 
 import { Trade } from "@/lib/db/trades";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface FloatingBarProps {
   trades:        Trade[];
