@@ -23,6 +23,7 @@ export default function CalculatorClient() {
   const [fetchedAt,       setFetchedAt]       = useState<Date | null>(null);
   const [exchange,        setExchange]        = useState<"NSE" | "BSE" | "NYSE" | "NASDAQ">("NSE");
   const [market, setMarket] = useState<"INR" | "USD">("INR");
+  const [capitalPools, setCapitalPools] = useState<{ INR: number; USD: number }>({ INR: 100000, USD: 10000 });
   const [displayedQty,       setDisplayedQty]       = useState<number>(0);
   const [displayedRisk,      setDisplayedRisk]       = useState<number>(0);
   const [displayedCapReq,    setDisplayedCapReq]     = useState<number>(0);
@@ -47,7 +48,9 @@ export default function CalculatorClient() {
           .is("deleted_at", null),
       ]);
       const trades = tradesRow.data ?? [];
-      const limit = market === "USD" ? (userRow.data?.capital_limit_usd ?? 10000) : (userRow.data?.capital_limit ?? 100000);
+      const pools = { INR: userRow.data?.capital_limit ?? 100000, USD: userRow.data?.capital_limit_usd ?? 10000 };
+      setCapitalPools(pools);
+      const limit = pools[market];
       const deployed = trades.filter((t: any) => (t.currency ?? "INR") === market && t.status === "OPEN")
         .reduce((sum: number, t: any) => sum + t.entry_price * t.quantity, 0);
       setAvailableCapital(limit - deployed);
@@ -106,7 +109,7 @@ export default function CalculatorClient() {
 
       {/* Left: Input card */}
       <section className={cardClass}>
-        <CalculatorForm onSubmit={handleCalculate} isLoading={status === "loading"}/>
+        <CalculatorForm onSubmit={handleCalculate} isLoading={status === "loading"} capitalPools={capitalPools}/>
       </section>
 
       {/* Right: Results card */}
