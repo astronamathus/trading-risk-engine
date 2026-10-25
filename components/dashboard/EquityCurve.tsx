@@ -15,15 +15,7 @@ interface EquityCurveProps {
 
 const CLOSED_STATUSES = ["CLOSED", "STOPPED", "TARGET_HIT"] as const;
 
-function formatINR(v: number) {
-  const abs = Math.abs(v);
-  const str = abs >= 100000
-    ? `₹${(abs / 100000).toFixed(2)}L`
-    : abs >= 1000
-      ? `₹${(abs / 1000).toFixed(1)}k`
-      : `₹${abs.toFixed(0)}`;
-  return v < 0 ? `-${str}` : str;
-}
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 function pickTicks(len: number, max = 6): number[] {
   if (len <= max) return Array.from({ length: len }, (_, i) => i);
