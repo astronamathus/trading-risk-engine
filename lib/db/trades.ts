@@ -61,7 +61,6 @@ const TRADE_COLUMNS = [
   "user_id",
   "ticker",
   "currency",
-  "currency",
   "entry_price",
   "entry_target",
   "stop_loss",
