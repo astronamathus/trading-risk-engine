@@ -159,7 +159,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation();
     onSubmit({
-      ticker: ticker.trim(), stopLoss: parseFloat(stopLoss),
+      ticker: ticker.trim(), market, exchange: selectedExchange ?? (market === "INR" ? "NSE" : "NYSE"), stopLoss: parseFloat(stopLoss),
       capital: parseFloat(capital), riskPercent: parseFloat(riskPercent),
       riskRatio: parseFloat(riskRatio), rewardRatio: parseFloat(rewardRatio),
       entryPrice: parseFloat(entryPrice),
