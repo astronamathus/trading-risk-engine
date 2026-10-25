@@ -90,6 +90,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
     .filter(t => (t.risk_amount ?? 0) > 0)
     .map(t => ({
       name:     t.ticker.replace(/\.(NS|BO)$/, ""),
+      ticker: t.ticker,
       value:    t.risk_amount ?? 0,
       capital:  t.entry_price * t.quantity,
     }))
@@ -124,8 +125,8 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
     return (
       <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-xs shadow-xl">
         <p style={{ color: SLICE_COLOURS[idx].stroke }} className="font-medium">{d.name}</p>
-        <p className="text-slate-400">Risk: {formatINR(d.value, d.name)} · {pct}%</p>
-        <p className="text-slate-400">Capital: {formatINR(cap, d.name)}</p>
+        <p className="text-slate-400">Risk: {formatINR(d.value, d.ticker ?? "RELIANCE.NS")} · {pct}%</p>
+        <p className="text-slate-400">Capital: {formatINR(cap, pieData[idx]?.ticker ?? "RELIANCE.NS")}</p>
       </div>
     );
   };
@@ -249,7 +250,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
                     <span className="text-slate-700 dark:text-slate-300 font-mono truncate">{d.name}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 text-slate-400 dark:text-slate-500 tabular-nums">
-                    <span>{formatINR(d.capital)}</span>
+                    <span>{formatINR(d.capital, d.ticker ?? "RELIANCE.NS")}</span>
                     <span className="text-slate-300 dark:text-slate-600">·</span>
                     <span>{pct}%</span>
                   </div>
@@ -314,7 +315,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
               <td className="pt-3 font-medium text-slate-500 dark:text-slate-400">
                 {tableRows.length} position{tableRows.length !== 1 ? "s" : ""}
               </td>
-              <td className="pt-3 tabular-nums text-amber-400 font-medium">{formatINR(totalRisk)}</td>
+              <td className="pt-3 tabular-nums text-amber-400 font-medium">{formatINR(totalRisk, tableRows[0]?.trade.ticker ?? "RELIANCE.NS")}</td>
               <td className="pt-3">100%</td>
               <td className="pt-3"/>
               <td className={`pt-3 tabular-nums font-medium ${
