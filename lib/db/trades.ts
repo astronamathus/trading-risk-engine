@@ -43,6 +43,7 @@ export interface Trade {
 export interface NewTrade {
   user_id:       string;
   ticker:        string;
+  currency?:     "INR" | "USD";
   entry_price:   number;
   entry_target?: number;
   stop_loss:     number;
@@ -79,6 +80,7 @@ const TRADE_COLUMNS = [
 const ACTIVE_TRADE_COLUMNS = [
   "id",
   "ticker",
+  "currency",
   "entry_price",
   "entry_target",
   "stop_loss",
