@@ -1,6 +1,7 @@
 "use client";
 
 import { Trade } from "@/lib/db/trades";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface SummaryCardsProps {
   trades:     Trade[];
@@ -9,13 +10,9 @@ interface SummaryCardsProps {
 
 const CLOSED_STATUSES = ["CLOSED", "STOPPED", "TARGET_HIT"] as const;
 
-function fmt(v: number): string {
-  const abs = new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 0,
-  }).format(Math.abs(v));
-  if (v > 0) return `+ ${abs}`;
-  if (v < 0) return `- ${abs}`;
-  return abs;
+function fmt(v: number, currency: "INR" | "USD" = "INR"): string {
+  const abs = formatMoney(Math.abs(v), currency);
+  return v > 0 ? `+ ${abs}` : v < 0 ? `- ${abs}` : abs;
 }
 
 function Card({ label, value, sub, sub2 }: {
@@ -48,16 +45,30 @@ export default function SummaryCards({ trades, livePrices }: SummaryCardsProps) 
   }, 0);
   const totalPnl = realisedPnl + unrealisedPnl;
 
+  const pnlFor = (currency: "INR" | "USD") => {
+    const poolClosed = closed.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === currency);
+    const poolOpen = open.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === currency);
+    const realised = poolClosed.reduce((sum, t) => sum + (t.realised_pnl ?? 0), 0);
+    const unrealised = poolOpen.reduce((sum, t) => { const ltp = livePrices[t.ticker]; return sum + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : 0); }, 0);
+    return { realised, unrealised, total: realised + unrealised };
+  };
+  const inrPnl = pnlFor("INR");
+  const usdPnl = pnlFor("USD");
+  const pnlPair = (field: "total" | "realised" | "unrealised") => `INR ${fmt(inrPnl[field], "INR")} · USD ${fmt(usdPnl[field], "USD")}`;
+
   const winRate = closed.length > 0
     ? ((winners.length / closed.length) * 100).toFixed(0) : "—";
 
-  const avgWin  = winners.length > 0
-    ? winners.reduce((s, t) => s + (t.realised_pnl ?? 0), 0) / winners.length : 0;
-  const avgLoss = losers.length > 0
-    ? Math.abs(losers.reduce((s, t) => s + (t.realised_pnl ?? 0), 0) / losers.length) : 0;
-  const rrRatio = avgLoss > 0 ? (avgWin / avgLoss).toFixed(2) : "—";
+  const ratioFor = (currency: "INR" | "USD") => {
+    const poolWinners = winners.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === currency);
+    const poolLosers = losers.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === currency);
+    const avgWin = poolWinners.length ? poolWinners.reduce((sum, t) => sum + (t.realised_pnl ?? 0), 0) / poolWinners.length : 0;
+    const avgLoss = poolLosers.length ? Math.abs(poolLosers.reduce((sum, t) => sum + (t.realised_pnl ?? 0), 0) / poolLosers.length) : 0;
+    return avgLoss > 0 ? (avgWin / avgLoss).toFixed(2) : "—";
+  };
+  const rrRatio = `INR ${ratioFor("INR")} · USD ${ratioFor("USD")}`;
 
-  const capital = trades.find(t => t.capital)?.capital ?? 100000;
+
 
   // Drawdown: unrealised loss on open positions below entry
   const drawdown = open.reduce((s, t) => {
@@ -77,7 +88,7 @@ export default function SummaryCards({ trades, livePrices }: SummaryCardsProps) 
   // We treat each closed trade's P&L as a "period return" relative to capital.
   const tradeReturns = closed
     .filter(t => (t.risk_amount ?? 0) > 0)
-    .map(t => ((t.realised_pnl ?? 0) / capital) * 100);
+    .map(t => ((t.realised_pnl ?? 0) / (t.capital ?? (marketFromTicker(t.ticker) === "INR" ? 100000 : 10000))) * 100);
 
   const n = tradeReturns.length;
   const meanReturn = n > 0 ? tradeReturns.reduce((s, r) => s + r, 0) / n : 0;
@@ -104,9 +115,9 @@ export default function SummaryCards({ trades, livePrices }: SummaryCardsProps) 
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       <Card
         label="Total P&L"
-        value={fmt(totalPnl)}
-        sub={`${fmt(realisedPnl)} realised`}
-        sub2={`${fmt(unrealisedPnl)} open`}
+        value={pnlPair("total")}
+        sub={`${pnlPair("realised")} realised`}
+        sub2={`${pnlPair("unrealised")} open`}
       />
       <Card
         label="Win Rate"
@@ -116,9 +127,8 @@ export default function SummaryCards({ trades, livePrices }: SummaryCardsProps) 
       />
       <Card
         label="W:L Ratio"
-        value={rrRatio === "—" ? "—" : rrRatio}
-        sub={avgWin > 0 ? `avg win ${fmt(avgWin)}` : undefined}
-        sub2={avgLoss > 0 ? `avg loss ${fmt(-avgLoss)}` : undefined}
+        value={rrRatio}
+        sub="Average win ÷ average loss within each currency pool"
       />
       <Card
         label="Sharpe Ratio"
