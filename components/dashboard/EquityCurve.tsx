@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { Trade } from "@/lib/db/trades";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface EquityCurveProps {
   trades:     Trade[];
@@ -149,7 +150,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
               </span>
               <span className="font-semibold tabular-nums"
                 style={{ color: p.value >= 0 ? "#10b981" : "#f87171" }}>
-                {p.value >= 0 ? "+" : ""}{formatINR(p.value)}
+                {p.value >= 0 ? "+" : ""}{formatINR(p.value, chartData[0]?.ticker ?? "RELIANCE.NS")}
               </span>
             </div>
           ) : null
@@ -182,7 +183,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
             <span className={`font-semibold ${isPositive
               ? "text-emerald-600 dark:text-emerald-400"
               : "text-red-600 dark:text-red-400"}`}>
-              {isPositive ? "+" : ""}{formatINR(displayTotal)} total
+              {isPositive ? "+" : ""}{formatINR(displayTotal, chartData[chartData.length - 1]?.ticker ?? "RELIANCE.NS")} total
             </span>
           )}
           <span className="flex items-center gap-1.5">
@@ -236,7 +237,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
             <YAxis
               tick={{ fill: "#94a3b8", fontSize: 11 }}
               axisLine={false} tickLine={false}
-              tickFormatter={v => formatINR(v)}
+              tickFormatter={v => formatINR(v, chartData[0]?.ticker ?? "RELIANCE.NS")}
               width={58}
             />
 
@@ -307,7 +308,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
                       ? "text-emerald-600 dark:text-emerald-400"
                       : "text-red-600 dark:text-red-400"
                   }`}>
-                    {pos ? "+" : ""}{formatINR(pnl)}
+                    {pos ? "+" : ""}{formatINR(pnl, trades.find(t => new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }) === month)?.ticker ?? "RELIANCE.NS")}
                   </span>
                 </button>
               );
