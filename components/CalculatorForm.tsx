@@ -13,6 +13,7 @@ interface Suggestion {
 }
 
 interface CalculatorFormProps {
+  capitalPools: { INR: number; USD: number };
   onSubmit:  (inputs: CalculatorInputs & { entryPrice: number }) => void;
   isLoading: boolean;
 }
@@ -63,13 +64,14 @@ const inputClass =
   "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent " +
   "transition-all text-sm";
 
-export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormProps) {
+export default function CalculatorForm({ onSubmit, isLoading, capitalPools }: CalculatorFormProps) {
   const [ticker,      setTicker]      = useState("");
   const [entryPrice,  setEntryPrice]  = useState("");
   const [stopLoss,    setStopLoss]    = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [capital,      setCapital]      = useState("100000");
   const [market, setMarket] = useState<"INR" | "USD">("INR");
+  useEffect(() => { setCapital(String(capitalPools[market])); }, [capitalPools, market]);
   const [riskPercent,  setRiskPercent]  = useState("1");
   const [riskRatio,    setRiskRatio]    = useState("1");
   const [rewardRatio,  setRewardRatio]  = useState("2");
@@ -137,7 +139,7 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
 
   function handleSelect(s: Suggestion) {
     setTicker(s.symbol); setSelectedExchange(s.exchange); setMarket(s.market);
-    setCapital(s.market === "USD" ? "10000" : "100000");
+    setCapital(String(capitalPools[s.market]));
     setSuggestions([]); setShowSuggestions(false);
     fetchLtp(s.symbol);
   }
