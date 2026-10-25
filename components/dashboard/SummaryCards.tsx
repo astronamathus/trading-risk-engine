@@ -70,14 +70,6 @@ export default function SummaryCards({ trades, livePrices }: SummaryCardsProps) 
 
 
 
-  // Drawdown: unrealised loss on open positions below entry
-  const drawdown = open.reduce((s, t) => {
-    const ltp = livePrices[t.ticker];
-    if (ltp === undefined) return s;
-    const pnl = (ltp - t.entry_price) * t.quantity;
-    return pnl < 0 ? s + pnl : s;
-  }, 0);
-  const drawdownPct = capital > 0 ? (Math.abs(drawdown) / capital) * 100 : 0;
 
   // Profit factor
   const grossWin  = winners.reduce((s, t) => s + (t.realised_pnl ?? 0), 0);
