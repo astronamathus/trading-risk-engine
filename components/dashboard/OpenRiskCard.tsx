@@ -38,11 +38,7 @@ const SLICE_COLOURS = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────
-function formatINR(v: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 0,
-  }).format(v);
-}
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 // SL/TG progress bar — grey track, entry tick, green/red fill
 function SlTgBar({ entry, sl, ltp }: { entry: number; sl: number; ltp: number | undefined }) {
