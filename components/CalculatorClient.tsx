@@ -12,6 +12,7 @@ import { validateInputs, calculatePosition, validateStopLoss } from "@/lib/calcu
 import { CalculatorInputs, CalculationResult, AppStatus } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 export default function CalculatorClient() {
   const [status,          setStatus]          = useState<AppStatus>("idle");
@@ -20,7 +21,8 @@ export default function CalculatorClient() {
   const [submittedTicker, setSubmittedTicker] = useState<string>("");
   const [totalCapital,    setTotalCapital]    = useState<number>(0);
   const [fetchedAt,       setFetchedAt]       = useState<Date | null>(null);
-  const [exchange,        setExchange]        = useState<"NSE" | "BSE">("NSE");
+  const [exchange,        setExchange]        = useState<"NSE" | "BSE" | "NYSE" | "NASDAQ">("NSE");
+  const [market, setMarket] = useState<"INR" | "USD">("INR");
   const [displayedQty,       setDisplayedQty]       = useState<number>(0);
   const [displayedRisk,      setDisplayedRisk]       = useState<number>(0);
   const [displayedCapReq,    setDisplayedCapReq]     = useState<number>(0);
@@ -37,22 +39,21 @@ export default function CalculatorClient() {
     if (!userId) return;
     async function fetchAvailable() {
       const [userRow, tradesRow] = await Promise.all([
-        supabase.from("trader_users").select("capital_limit").eq("id", userId).single(),
+        supabase.from("trader_users").select("capital_limit, capital_limit_usd").eq("id", userId).single(),
         supabase.from("trades")
-          .select("entry_price, quantity")
+          .select("entry_price, quantity, currency, status")
           .eq("user_id", userId)
           .eq("status", "OPEN")
           .is("deleted_at", null),
       ]);
-      const limit     = userRow.data?.capital_limit ?? 100000;
-      const deployed  = (tradesRow.data ?? []).reduce(
-        (sum: number, t: { entry_price: number; quantity: number }) =>
-          sum + t.entry_price * t.quantity, 0
-      );
+      const trades = tradesRow.data ?? [];
+      const limit = market === "USD" ? (userRow.data?.capital_limit_usd ?? 10000) : (userRow.data?.capital_limit ?? 100000);
+      const deployed = trades.filter((t: any) => (t.currency ?? "INR") === market && t.status === "OPEN")
+        .reduce((sum: number, t: any) => sum + t.entry_price * t.quantity, 0);
       setAvailableCapital(limit - deployed);
     }
     fetchAvailable();
-  }, [userId]);
+  }, [userId, market]);
 
   async function handleCalculate(inputs: CalculatorInputs & { entryPrice: number }) {
     setError(null);
@@ -73,6 +74,8 @@ export default function CalculatorClient() {
       if (!data.success) throw new Error(data.error || "Failed to fetch price.");
 
       const livePrice  = data.price as number;
+      const currency = (data.market ?? inputs.market ?? marketFromTicker(inputs.ticker)) as "INR" | "USD";
+      setMarket(currency);
       const entryPrice = inputs.entryPrice;
       const queued     = entryPrice > livePrice;
 
@@ -84,7 +87,7 @@ export default function CalculatorClient() {
       setSubmittedTicker(data.ticker);
       setTotalCapital(inputs.capital);
       setFetchedAt(new Date());
-      setExchange(data.ticker?.endsWith(".BO") ? "BSE" : "NSE");
+      setExchange(data.exchange ?? (currency === "INR" ? (data.ticker?.endsWith(".BO") ? "BSE" : "NSE") : "NYSE"));
       setIsQueued(queued);
       setLivePriceAtCalc(livePrice);
       setStatus("success");
@@ -154,7 +157,7 @@ export default function CalculatorClient() {
                   <path d="M8 4.5V8l2.5 2"/>
                 </svg>
                 <span>
-                  Entry ₹{result.entryPrice.toLocaleString("en-IN")} is above LTP ₹{livePriceAtCalc.toLocaleString("en-IN")}.
+                  Entry {formatMoney(result.entryPrice, market)} is above LTP {formatMoney(livePriceAtCalc, market)}.
                   This trade will be <strong>queued</strong> and activate automatically when price is reached.
                 </span>
               </div>
