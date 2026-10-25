@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Trade, updateTradeStatus, closeTrade } from "@/lib/db/trades";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface LedgerProps {
   trades:        Trade[];
@@ -80,7 +81,7 @@ function PnlValue({ trade, ltp, mode, loading }: {
     const pct    = trade.entry_price > 0
       ? (trade.realised_pnl / (trade.entry_price * trade.quantity)) * 100 : 0;
     const text = mode === "value"
-      ? `${profit ? "+" : ""}${formatINR(trade.realised_pnl)}`
+      ? `${profit ? "+" : ""}${formatINR(trade.realised_pnl, trade.ticker)}`
       : `${profit ? "+" : ""}${pct.toFixed(2)}%`;
     return (
       <span className={`${colour} font-medium tabular-nums`}>
@@ -100,7 +101,7 @@ function PnlValue({ trade, ltp, mode, loading }: {
   const profit = diff >= 0;
   const colour = profit ? "text-emerald-400" : "text-red-400";
   const text   = mode === "value"
-    ? `${profit ? "+" : ""}${formatINR(pnlVal)}`
+    ? `${profit ? "+" : ""}${formatINR(pnlVal, trade.ticker)}`
     : `${profit ? "+" : ""}${pnlPct.toFixed(2)}%`;
   return (
     <span className={`${colour} font-medium tabular-nums`}>
@@ -145,7 +146,7 @@ function DetailPanel({ trade, ltp, onAction }: {
   );
   const priceLabel = trade.status === "OPEN" ? "LTP" : "Exit";
   const priceValue = trade.status === "OPEN"
-    ? (ltp ? formatINR(ltp) : "—")
+    ? (ltp ? formatINR(ltp, trade.ticker) : "—")
     : (trade.exit_price ? formatINR(trade.exit_price) : "—");
   const priceColour = trade.status === "OPEN" ? "text-blue-300" : "text-amber-300";
 
@@ -155,8 +156,8 @@ function DetailPanel({ trade, ltp, onAction }: {
 
         <div className="grid grid-cols-5 gap-3 text-xs">
           {[
-            { label: "Entry",     value: formatINR(trade.entry_price), colour: "text-slate-700 dark:text-slate-300"   },
-            { label: "Stop Loss", value: formatINR(trade.stop_loss),   colour: "text-red-400"     },
+            { label: "Entry",     value: formatINR(trade.entry_price, trade.ticker), colour: "text-slate-700 dark:text-slate-300"   },
+            { label: "Stop Loss", value: formatINR(trade.stop_loss, trade.ticker),   colour: "text-red-400"     },
             { label: "Target",    value: formatINR(target),            colour: "text-emerald-400" },
             { label: priceLabel,  value: priceValue,                   colour: priceColour        },
             { label: "Risk:Reward", value: `1 : ${rrReward.toFixed(2)}`,       colour: "text-slate-700 dark:text-slate-300"   },
