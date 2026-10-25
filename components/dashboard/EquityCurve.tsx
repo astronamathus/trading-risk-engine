@@ -34,12 +34,12 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const { fullSeries, monthlyBars, openMtm } = useMemo(() => {
-    const closed = trades
+    const closed = currencyTrades
       .filter(t => (CLOSED_STATUSES as readonly string[]).includes(t.status) && t.realised_pnl !== null)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     // Current unrealised P&L across all open positions
-    const openPnl = trades
+    const openPnl = currencyTrades
       .filter(t => t.status === "OPEN")
       .reduce((s, t) => {
         const ltp = livePrices[t.ticker];
@@ -301,7 +301,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
                       ? "text-emerald-600 dark:text-emerald-400"
                       : "text-red-600 dark:text-red-400"
                   }`}>
-                    {pos ? "+" : ""}{formatINR(pnl, trades.find(t => new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }) === month)?.ticker ?? "RELIANCE.NS")}
+                    {pos ? "+" : ""}{formatINR(pnl, currencyTrades.find(t => new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }) === month)?.ticker ?? "RELIANCE.NS")}
                   </span>
                 </button>
               );
