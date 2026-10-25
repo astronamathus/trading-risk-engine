@@ -287,14 +287,14 @@ export default function CalculatorForm({ onSubmit, isLoading }: CalculatorFormPr
       </Field>
 
       {/* Entry Price */}
-      <Field label={`Entry Price (${currencySymbol(market)})` hint={entryHint ?? "Auto-filled from LTP — edit to queue at a different price"}>
+      <Field label={`Entry Price (${currencySymbol(market)})`} hint={entryHint ?? "Auto-filled from LTP — edit to queue at a different price"}>
         <input type="number" className={inputClass} placeholder="e.g. 2300"
           value={entryPrice} onChange={e => setEntryPrice(e.target.value)}
           disabled={isLoading} min="0.01" step="0.01" required/>
       </Field>
 
       {/* Stop Loss */}
-      <Field label={`Stop Loss (${currencySymbol(market)})` hint="Price at which you'll exit if the trade moves against you">
+      <Field label={`Stop Loss (${currencySymbol(market)})`} hint="Price at which you'll exit if the trade moves against you">
         <input type="number" className={inputClass} placeholder="e.g. 2200"
           value={stopLoss} onChange={e => setStopLoss(e.target.value)}
           disabled={isLoading} min="0.01" step="0.01" required/>
