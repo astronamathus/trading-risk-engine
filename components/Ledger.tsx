@@ -14,7 +14,7 @@ interface LedgerProps {
 
 type PnlMode = "value" | "percent";
 
-function formatINR(v: number, ticker: string, trade.ticker) { return formatMoney(v, marketFromTicker(ticker)); }
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 function StatusBadge({ status }: { status: Trade["status"] }) {
   const styles: Record<Trade["status"], string> = {
@@ -77,7 +77,7 @@ function PnlValue({ trade, ltp, mode, loading }: {
     const pct    = trade.entry_price > 0
       ? (trade.realised_pnl / (trade.entry_price * trade.quantity)) * 100 : 0;
     const text = mode === "value"
-      ? `${profit ? "+" : ""}${formatINR(trade.realised_pnl, trade.ticker, trade.ticker)}`
+      ? `${profit ? "+" : ""}${formatINR(trade.realised_pnl, trade.ticker)}`
       : `${profit ? "+" : ""}${pct.toFixed(2)}%`;
     return (
       <span className={`${colour} font-medium tabular-nums`}>
@@ -97,7 +97,7 @@ function PnlValue({ trade, ltp, mode, loading }: {
   const profit = diff >= 0;
   const colour = profit ? "text-emerald-400" : "text-red-400";
   const text   = mode === "value"
-    ? `${profit ? "+" : ""}${formatINR(pnlVal, trade.ticker, trade.ticker)}`
+    ? `${profit ? "+" : ""}${formatINR(pnlVal, trade.ticker)}`
     : `${profit ? "+" : ""}${pnlPct.toFixed(2)}%`;
   return (
     <span className={`${colour} font-medium tabular-nums`}>
@@ -142,7 +142,7 @@ function DetailPanel({ trade, ltp, onAction }: {
   );
   const priceLabel = trade.status === "OPEN" ? "LTP" : "Exit";
   const priceValue = trade.status === "OPEN"
-    ? (ltp ? formatINR(ltp, trade.ticker, trade.ticker) : "—")
+    ? (ltp ? formatINR(ltp, trade.ticker) : "—")
     : (trade.exit_price ? formatINR(trade.exit_price, trade.ticker) : "—");
   const priceColour = trade.status === "OPEN" ? "text-blue-300" : "text-amber-300";
 
