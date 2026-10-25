@@ -4,6 +4,7 @@
 // If more than one file uses a type, it lives here.
 // ============================================================
 export interface CalculatorInputs {
+  market: "INR" | "USD";
   ticker:      string;
   stopLoss:    number;
   capital:     number;
