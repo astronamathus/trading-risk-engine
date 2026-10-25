@@ -282,7 +282,7 @@ export default function ResultsPanel({
             ? "Sized by risk rule — capital × risk% ÷ risk per share"
             : limitValue === totalCapital
               ? "Using full capital for this position"
-              : `Capped at ${formatINR(limitValue)} (${pctOfCapital.toFixed(1)}% of capital)`}
+              : `Capped at ${formatINR(limitValue, ticker)} (${pctOfCapital.toFixed(1)}% of capital)`}
         </span>
       </div>
     </div>
