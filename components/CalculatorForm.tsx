@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CalculatorInputs } from "@/types";
 import { searchStocks } from "@/lib/stockList";
-import { currencySymbol, formatMoney } from "@/lib/currency";
+import { currencySymbol, formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface Suggestion {
   symbol:   string;
@@ -128,6 +128,9 @@ export default function CalculatorForm({ onSubmit, isLoading, capitalPools }: Ca
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       const price = data.price as number;
+      const resolvedMarket = (data.market ?? marketFromTicker(rawTicker)) as "INR" | "USD";
+      setMarket(resolvedMarket);
+      setCapital(String(capitalPools[resolvedMarket]));
       setLtp(price);
       setEntryPrice(price.toFixed(2));
     } catch (err) {
