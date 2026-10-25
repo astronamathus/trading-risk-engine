@@ -30,6 +30,7 @@ function tickLabel(ts: number) {
 }
 
 export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
+  const currencyTrades = trades.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === (trades[0]?.currency ?? marketFromTicker(trades[0]?.ticker ?? "RELIANCE.NS")));
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const { fullSeries, monthlyBars, openMtm } = useMemo(() => {
@@ -88,7 +89,7 @@ export default function EquityCurve({ trades, livePrices }: EquityCurveProps) {
     const monthlyBars = Object.entries(map).map(([month, pnl]) => ({ month, pnl: Math.round(pnl) }));
 
     return { fullSeries: pointsWithMtm, monthlyBars, openMtm: Math.round(openPnl) };
-  }, [trades, livePrices]);
+  }, [currencyTrades, livePrices]);
 
   // Filter to selected month (rebased to zero at month start)
   const series = useMemo(() => {
