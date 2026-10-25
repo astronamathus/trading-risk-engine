@@ -20,7 +20,6 @@ export interface Trade {
   id:            string;
   user_id:       string;
   ticker:        string;
-  currency?:     "INR" | "USD";
   currency:      "INR" | "USD";
   entry_price:   number;
   entry_target:  number | null;
