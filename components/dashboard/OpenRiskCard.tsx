@@ -18,6 +18,7 @@
 import { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { Trade } from "@/lib/db/trades";
+import { formatMoney, marketFromTicker } from "@/lib/currency";
 
 interface Props {
   trades:     Trade[];
@@ -127,8 +128,8 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
     return (
       <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-xs shadow-xl">
         <p style={{ color: SLICE_COLOURS[idx].stroke }} className="font-medium">{d.name}</p>
-        <p className="text-slate-400">Risk: {formatINR(d.value)} · {pct}%</p>
-        <p className="text-slate-400">Capital: {formatINR(cap)}</p>
+        <p className="text-slate-400">Risk: {formatINR(d.value, d.name)} · {pct}%</p>
+        <p className="text-slate-400">Capital: {formatINR(cap, d.name)}</p>
       </div>
     );
   };
@@ -175,7 +176,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
           )}
           <span className="text-slate-400 dark:text-slate-500">
             Total risk:{" "}
-            <span className="text-amber-400 font-medium tabular-nums">{formatINR(totalRisk)}</span>
+            <span className="text-amber-400 font-medium tabular-nums">{formatINR(totalRisk, tableRows[0]?.trade.ticker ?? "RELIANCE.NS")}</span>
           </span>
         </div>
       </div>
@@ -270,7 +271,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
             <tr className="border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wider
               text-slate-400 dark:text-slate-500">
               <th className="pb-2 pr-4 text-left font-medium">Stock</th>
-              <th className="pb-2 pr-4 text-left font-medium">Risk ₹</th>
+              <th className="pb-2 pr-4 text-left font-medium">Risk (local currency)</th>
               <th className="pb-2 pr-4 text-left font-medium">Pool %</th>
               <th className="pb-2 pr-6 text-left font-medium">SL · TG</th>
               <th className="pb-2 pr-4 text-left font-medium">Return %</th>
@@ -289,7 +290,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
                   </div>
                 </td>
                 <td className="py-2.5 pr-4 tabular-nums text-slate-700 dark:text-slate-300">
-                  {formatINR(riskAmt)}
+                  {formatINR(riskAmt, trade.ticker)}
                 </td>
                 <td className="py-2.5 pr-4 tabular-nums text-slate-400 dark:text-slate-500">
                   {riskPct.toFixed(1)}%
