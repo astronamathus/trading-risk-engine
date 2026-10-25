@@ -87,7 +87,7 @@ export default function CalculatorClient() {
       setSubmittedTicker(data.ticker);
       setTotalCapital(inputs.capital);
       setFetchedAt(new Date());
-      setExchange(data.exchange ?? (currency === "INR" ? (data.ticker?.endsWith(".BO") ? "BSE" : "NSE") : "NYSE"));
+      setExchange(inputs.exchange ?? data.exchange ?? (currency === "INR" ? (data.ticker?.endsWith(".BO") ? "BSE" : "NSE") : "NYSE"));
       setIsQueued(queued);
       setLivePriceAtCalc(livePrice);
       setStatus("success");
