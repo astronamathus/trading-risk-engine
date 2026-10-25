@@ -5,6 +5,7 @@
 // ============================================================
 export interface CalculatorInputs {
   market: "INR" | "USD";
+  exchange: "NSE" | "BSE" | "NYSE" | "NASDAQ";
   ticker:      string;
   stopLoss:    number;
   capital:     number;
