@@ -20,9 +20,7 @@ interface SaveToLedgerButtonProps {
 
 type ToastState = "idle" | "saving" | "success" | "error" | "insufficient";
 
-function formatINR(v: number) {
-  return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 export default function SaveToLedgerButton({
   userId, ticker, result, displayedQty, displayedRisk,
