@@ -62,7 +62,9 @@ export default function CalculatorClient() {
     setError(null);
     setResult(null);
 
-    const validationError = validateInputs(inputs);
+    const resolvedMarket = marketFromTicker(inputs.ticker);
+    const sizingInputs = { ...inputs, market: resolvedMarket, capital: capitalPools[resolvedMarket] };
+    const validationError = validateInputs(sizingInputs);
     if (validationError) { setError(validationError); setStatus("error"); return; }
 
     setStatus("loading");
@@ -77,18 +79,18 @@ export default function CalculatorClient() {
       if (!data.success) throw new Error(data.error || "Failed to fetch price.");
 
       const livePrice  = data.price as number;
-      const currency = (data.market ?? inputs.market ?? marketFromTicker(inputs.ticker)) as "INR" | "USD";
+      const currency = (data.market ?? sizingInputs.market) as "INR" | "USD";
       setMarket(currency);
       const entryPrice = inputs.entryPrice;
       const queued     = entryPrice > livePrice;
 
-      const slError = validateStopLoss(inputs.stopLoss, entryPrice, inputs.capital, inputs.riskPercent);
+      const slError = validateStopLoss(sizingInputs.stopLoss, entryPrice, sizingInputs.capital, sizingInputs.riskPercent);
       if (slError) throw new Error(slError);
 
-      const calculationResult = calculatePosition(inputs, entryPrice);
+      const calculationResult = calculatePosition(sizingInputs, entryPrice);
       setResult(calculationResult);
       setSubmittedTicker(data.ticker);
-      setTotalCapital(inputs.capital);
+      setTotalCapital(sizingInputs.capital);
       setFetchedAt(new Date());
       setExchange(inputs.exchange ?? data.exchange ?? (currency === "INR" ? (data.ticker?.endsWith(".BO") ? "BSE" : "NSE") : "NYSE"));
       setIsQueued(queued);
