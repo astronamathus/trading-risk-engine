@@ -97,20 +97,23 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
     .sort((a, b) => b.value - a.value),
   [open]);
 
-  const totalRisk = pieData.reduce((s, d) => s + d.value, 0);
+  const totalRiskINR = pieData.filter(d => marketFromTicker(d.ticker) === "INR").reduce((sum, d) => sum + d.value, 0);
+  const totalRiskUSD = pieData.filter(d => marketFromTicker(d.ticker) === "USD").reduce((sum, d) => sum + d.value, 0);
+  const totalRiskLabel = [totalRiskINR > 0 ? formatMoney(totalRiskINR, "INR") : null, totalRiskUSD > 0 ? formatMoney(totalRiskUSD, "USD") : null].filter(Boolean).join(" · ") || "—";
 
   // ── Risk table rows ───────────────────────────────────────
   const tableRows = useMemo(() => open.map(t => {
     const ltp       = livePrices[t.ticker];
     const riskAmt   = t.risk_amount ?? 0;
-    const riskPct   = totalRisk > 0 ? (riskAmt / totalRisk) * 100 : 0;
+    const poolRisk = marketFromTicker(t.ticker) === "INR" ? totalRiskINR : totalRiskUSD;
+    const riskPct   = poolRisk > 0 ? (riskAmt / poolRisk) * 100 : 0;
     const returnPct = ltp !== undefined
       ? ((ltp - t.entry_price) / t.entry_price) * 100
       : null;
     const daysHeld  = Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000);
     const sl        = t.stop_loss ?? (t.entry_price - riskAmt / t.quantity);
     return { trade: t, ltp, riskAmt, riskPct, returnPct, daysHeld, sl };
-  }).sort((a, b) => b.riskAmt - a.riskAmt), [open, livePrices, totalRisk]);
+  }).sort((a, b) => marketFromTicker(a.trade.ticker) === marketFromTicker(b.trade.ticker) ? b.riskAmt - a.riskAmt : marketFromTicker(a.trade.ticker).localeCompare(marketFromTicker(b.trade.ticker))), [open, livePrices, totalRiskINR, totalRiskUSD]);
 
   const totalReturnPct = tableRows.length > 0 && tableRows.some(r => r.returnPct !== null)
     ? tableRows.reduce((s, r) => s + (r.returnPct ?? 0), 0) / tableRows.filter(r => r.returnPct !== null).length
@@ -119,7 +122,8 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
   const PieTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     const d   = payload[0];
-    const pct = totalRisk > 0 ? ((d.value / totalRisk) * 100).toFixed(1) : "0";
+    const poolRisk = marketFromTicker(d.payload?.ticker ?? pieData.find(x => x.name === d.name)?.ticker ?? "RELIANCE.NS") === "INR" ? totalRiskINR : totalRiskUSD;
+    const pct = poolRisk > 0 ? ((d.value / poolRisk) * 100).toFixed(1) : "0";
     const idx = pieData.findIndex(x => x.name === d.name) % SLICE_COLOURS.length;
     const cap = pieData[idx]?.capital ?? 0;
     return (
@@ -173,7 +177,7 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
           )}
           <span className="text-slate-400 dark:text-slate-500">
             Total risk:{" "}
-            <span className="text-amber-400 font-medium tabular-nums">{formatINR(totalRisk, tableRows[0]?.trade.ticker ?? "RELIANCE.NS")}</span>
+            <span className="text-amber-400 font-medium tabular-nums">{totalRiskLabel}</span>
           </span>
         </div>
       </div>
@@ -240,7 +244,8 @@ export default function OpenRiskCard({ trades, livePrices }: Props) {
           </div>
           <div className="flex flex-col gap-1.5 flex-1 min-w-0">
             {pieData.map((d, i) => {
-              const pct = totalRisk > 0 ? ((d.value / totalRisk) * 100).toFixed(1) : "0";
+              const poolRisk = marketFromTicker(d.ticker) === "INR" ? totalRiskINR : totalRiskUSD;
+              const pct = poolRisk > 0 ? ((d.value / poolRisk) * 100).toFixed(1) : "0";
               const c   = SLICE_COLOURS[i % SLICE_COLOURS.length];
               return (
                 <div key={d.name} className="flex items-center justify-between gap-2 text-xs">
