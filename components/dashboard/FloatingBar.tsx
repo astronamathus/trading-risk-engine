@@ -35,43 +35,31 @@ export default function FloatingBar({ trades, livePrices, capitalLimit }: Floati
     t => t.status === "CLOSED" || t.status === "STOPPED" || t.status === "TARGET_HIT"
   );
 
-  // Portfolio value (LTP × qty for open trades)
-  const portfolioValue = open.reduce((s, t) => {
-    const ltp = livePrices[t.ticker];
-    return s + (ltp !== undefined ? ltp * t.quantity : t.entry_price * t.quantity);
-  }, 0);
-
-  // Mark to Market: live value vs entry cost of open book
-  const openEntryCost = open.reduce((s, t) => s + t.entry_price * t.quantity, 0);
-  const mtmPnl        = portfolioValue - openEntryCost;
-  const mtmPct        = openEntryCost > 0 ? (mtmPnl / openEntryCost) * 100 : 0;
-  const mtmDisplay    = `${mtmPnl >= 0 ? "+" : ""}${formatINR(mtmPnl)} (${mtmPct >= 0 ? "+" : ""}${mtmPct.toFixed(2)}%)`;
-
-  // Total capital at risk across open positions
-  const totalRisk = open.reduce((s, t) => s + (t.risk_amount ?? 0), 0);
-
-  // Portfolio risk %
-  const capital          = capitalLimit ?? open.find(t => t.capital)?.capital ?? 100000;
-  const portfolioRiskPct = capital > 0 ? (totalRisk / capital) * 100 : 0;
-
-  // Remaining capital
-  const remainingCap = capital - openEntryCost;
-  const remainingPct = capital > 0 ? (remainingCap / capital) * 100 : 0;
-
-  // Expectancy: average P&L per closed trade (truest measure of edge)
-  const expectancy = closed.length > 0
-    ? closed.reduce((s, t) => s + (t.realised_pnl ?? 0), 0) / closed.length
-    : null;
-
-  // Drawdown: sum of losing open positions vs entry
-  const drawdown = open.reduce((s, t) => {
-    const ltp = livePrices[t.ticker];
-    if (ltp === undefined) return s;
-    const pnl = (ltp - t.entry_price) * t.quantity;
-    return pnl < 0 ? s + pnl : s;
-  }, 0);
-  const drawdownPct = capital > 0 ? (Math.abs(drawdown) / capital) * 100 : 0;
-
+  const metrics = (currency: "INR" | "USD") => {
+    const poolOpen = open.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === currency);
+    const poolClosed = closed.filter(t => (t.currency ?? marketFromTicker(t.ticker)) === currency);
+    const value = poolOpen.reduce((sum, t) => sum + (livePrices[t.ticker] ?? t.entry_price) * t.quantity, 0);
+    const entryCost = poolOpen.reduce((sum, t) => sum + t.entry_price * t.quantity, 0);
+    const mtm = value - entryCost;
+    const risk = poolOpen.reduce((sum, t) => sum + (t.risk_amount ?? 0), 0);
+    const capital = currency === "INR" ? (capitalLimit ?? poolOpen.find(t => t.capital)?.capital ?? 100000) : (poolOpen.find(t => t.capital)?.capital ?? 10000);
+    const remaining = capital - entryCost;
+    const expectancy = poolClosed.length ? poolClosed.reduce((sum, t) => sum + (t.realised_pnl ?? 0), 0) / poolClosed.length : null;
+    const drawdown = poolOpen.reduce((sum, t) => {
+      const ltp = livePrices[t.ticker];
+      if (ltp === undefined) return sum;
+      const pnl = (ltp - t.entry_price) * t.quantity;
+      return pnl < 0 ? sum + pnl : sum;
+    }, 0);
+    return { value, entryCost, mtm, riskPct: capital > 0 ? risk / capital * 100 : 0, remaining, remainingPct: capital > 0 ? remaining / capital * 100 : 0, expectancy, drawdown, drawdownPct: capital > 0 ? Math.abs(drawdown) / capital * 100 : 0 };
+  };
+  const inr = metrics("INR");
+  const usd = metrics("USD");
+  const formatPair = (a: number, b: number) => `INR ${formatINR(a, "INR")} · USD ${formatINR(b, "USD")}`;
+  const mtmDisplay = `INR ${inr.mtm >= 0 ? "+" : ""}${formatINR(inr.mtm, "INR")} · USD ${usd.mtm >= 0 ? "+" : ""}${formatINR(usd.mtm, "USD")}`;
+  const expectancyDisplay = [inr.expectancy !== null ? `INR ${formatINR(inr.expectancy, "INR")}/trade` : null, usd.expectancy !== null ? `USD ${formatINR(usd.expectancy, "USD")}/trade` : null].filter(Boolean).join(" · ") || "—";
+  const remainingDisplay = formatPair(inr.remaining, usd.remaining);
+  const drawdownDisplay = [inr.drawdown < 0 ? `INR -${formatINR(Math.abs(inr.drawdown), "INR")} (${inr.drawdownPct.toFixed(1)}%)` : null, usd.drawdown < 0 ? `USD -${formatINR(Math.abs(usd.drawdown), "USD")} (${usd.drawdownPct.toFixed(1)}%)` : null].filter(Boolean).join(" · ") || "—";
   return (
     <div className="sticky top-3 z-40 w-full">
       <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md
@@ -79,16 +67,16 @@ export default function FloatingBar({ trades, livePrices, capitalLimit }: Floati
 
         <Stat
           label="Portfolio Value"
-          value={formatINR(portfolioValue)}
+          value={formatPair(inr.value, usd.value)}
         />
         <Stat
           label="Mark to Market"
-          value={mtmPnl !== 0 ? mtmDisplay : "—"}
-          colour={mtmPnl > 0 ? "text-emerald-400" : mtmPnl < 0 ? "text-red-400" : "text-slate-900 dark:text-slate-100"}
+          value={inr.mtm !== 0 || usd.mtm !== 0 ? mtmDisplay : "—"}
+          colour={inr.mtm + usd.mtm > 0 ? "text-emerald-400" : inr.mtm + usd.mtm < 0 ? "text-red-400" : "text-slate-900 dark:text-slate-100"}
         />
         <Stat
           label="Portfolio Risk"
-          value={`${portfolioRiskPct.toFixed(2)}%`}
+          value={`INR ${inr.riskPct.toFixed(2)}% · USD ${usd.riskPct.toFixed(2)}%`}
           colour={
             portfolioRiskPct > 5  ? "text-red-400"
             : portfolioRiskPct > 2 ? "text-amber-400"
@@ -97,7 +85,7 @@ export default function FloatingBar({ trades, livePrices, capitalLimit }: Floati
         />
         <Stat
           label="Expectancy"
-          value={expectancy !== null ? `${expectancy >= 0 ? "+" : ""}${formatINR(expectancy)}/trade` : "—"}
+          value={expectancyDisplay}
           colour={
             expectancy === null ? "text-slate-400 dark:text-slate-500"
             : expectancy >= 0 ? "text-emerald-400" : "text-red-400"
@@ -109,7 +97,7 @@ export default function FloatingBar({ trades, livePrices, capitalLimit }: Floati
         />
         <Stat
           label="Remaining Capital"
-          value={formatINR(remainingCap)}
+          value={remainingDisplay}
           colour={
             remainingPct < 20 ? "text-red-400"
             : remainingPct < 50 ? "text-amber-400"
@@ -118,8 +106,8 @@ export default function FloatingBar({ trades, livePrices, capitalLimit }: Floati
         />
         <Stat
           label="Drawdown"
-          value={drawdown < 0 ? `-${formatINR(Math.abs(drawdown))} (${drawdownPct.toFixed(1)}%)` : "—"}
-          colour={drawdown < 0 ? "text-red-400" : "text-slate-900 dark:text-slate-100"}
+          value={drawdownDisplay}
+          colour={inr.drawdown < 0 || usd.drawdown < 0 ? "text-red-400" : "text-slate-900 dark:text-slate-100"}
           border={false}
         />
       </div>
