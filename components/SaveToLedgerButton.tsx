@@ -70,6 +70,7 @@ export default function SaveToLedgerButton({
       await saveTrade({
         user_id:      userId,
         ticker,
+        currency: marketFromTicker(ticker),
         entry_price:  result.entryPrice,
         entry_target: isQueued ? result.entryPrice : undefined,
         stop_loss:    parseFloat((result.entryPrice - result.riskPerShare).toFixed(2)),
