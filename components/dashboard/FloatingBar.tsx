@@ -9,11 +9,7 @@ interface FloatingBarProps {
   capitalLimit?: number;
 }
 
-function formatINR(v: number) {
-  if (Math.abs(v) >= 100000) return `₹${(v / 100000).toFixed(2)}L`;
-  if (Math.abs(v) >= 1000)   return `₹${(v / 1000).toFixed(1)}k`;
-  return `₹${v.toFixed(0)}`;
-}
+function formatINR(v: number, market: "INR" | "USD" = "INR") { return formatMoney(v, market); }
 
 function Stat({
   label, value, colour = "text-slate-900 dark:text-slate-100", border = true,
