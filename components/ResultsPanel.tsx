@@ -15,11 +15,7 @@ interface ResultsPanelProps {
   onDisplayChange: (qty: number, risk: number, capitalRequired: number) => void;
 }
 
-function formatINR(v: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 2,
-  }).format(v);
-}
+function formatINR(v: number, ticker: string) { return formatMoney(v, marketFromTicker(ticker)); }
 
 function Tile({ label, value, sub, highlight = false, warn = false, tooltip }: {
   label: string; value: string; sub?: React.ReactNode;
