@@ -446,14 +446,30 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh, e
                     )}
                   </td>
                   <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums">
-                    {(() => {
-                      if (trade.status === "OPEN") {
-                        const v = ltp !== undefined ? ltp * trade.quantity : null;
-                        return v !== null ? formatINR(v, trade.ticker) : <span className="text-slate-400 dark:text-slate-600">—</span>;
-                      }
-                      if (trade.exit_price) return formatINR(trade.exit_price * trade.quantity, trade.ticker);
-                      return <span className="text-slate-400 dark:text-slate-600">—</span>;
-                    })()}
+                    {(["INR", "USD"] as const).map(currency => {
+            const pool = trades.filter(t => (t.currency ?? "INR") === currency);
+            if (!pool.length) return null;
+            const totalEntry = pool.reduce((sum, t) => sum + t.entry_price * t.quantity, 0);
+            const totalValue = pool.reduce((sum, t) => {
+              const ltp = t.status === "OPEN" ? livePrices[t.ticker] : undefined;
+              return sum + (ltp !== undefined ? ltp * t.quantity : (t.exit_price ?? t.entry_price) * t.quantity);
+            }, 0);
+            const totalRisk = pool.reduce((sum, t) => sum + (t.risk_amount ?? 0), 0);
+            const totalPnl = pool.reduce((sum, t) => {
+              const ltp = t.status === "OPEN" ? livePrices[t.ticker] : undefined;
+              return sum + (ltp !== undefined ? (ltp - t.entry_price) * t.quantity : (t.realised_pnl ?? 0));
+            }, 0);
+            return <tr key={currency} className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs">
+              <td className="px-4 py-3 font-medium">{currency} pool<div className="text-slate-400">{pool.length} trades</div></td>
+              <td className="px-4 py-3"/>
+              <td className="px-4 py-3 text-right tabular-nums">{formatMoney(totalEntry, currency)}</td>
+              <td className="px-4 py-3"/>
+              <td className="px-4 py-3 text-right tabular-nums">{formatMoney(totalValue, currency)}</td>
+              <td className="px-4 py-3 text-right tabular-nums">{formatMoney(totalRisk, currency)}</td>
+              <td className="px-4 py-3 text-right tabular-nums"><span className={totalPnl >= 0 ? "text-emerald-400" : "text-red-400"}>{totalPnl >= 0 ? "+" : ""}{formatMoney(totalPnl, currency)}</span></td>
+              <td className="px-4 py-3"/><td className="px-4 py-3"/>
+            </tr>;
+          })}
                   </td>
                   <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-400 tabular-nums">
                     {trade.risk_amount ? formatINR(trade.risk_amount, trade.ticker) : "—"}
