@@ -451,7 +451,7 @@ export default function Ledger({ trades, livePrices, pricesLoading, onRefresh, e
                         const v = ltp !== undefined ? ltp * trade.quantity : null;
                         return v !== null ? formatINR(v, trade.ticker) : <span className="text-slate-400 dark:text-slate-600">—</span>;
                       }
-                      if (trade.exit_price) return formatINR(trade.exit_price * trade.quantity);
+                      if (trade.exit_price) return formatINR(trade.exit_price * trade.quantity, trade.ticker);
                       return <span className="text-slate-400 dark:text-slate-600">—</span>;
                     })()}
                   </td>
