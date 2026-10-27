@@ -187,7 +187,7 @@ export default function SaveToLedgerButton({
         }`}>
           {availableCapital <= 0
             ? "No capital available"
-            : `${formatINR(availableCapital)} available`}
+            : `${formatINR(availableCapital, ticker)} available`}
         </p>
       )}
     </div>
